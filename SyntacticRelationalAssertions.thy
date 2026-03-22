@@ -37,13 +37,13 @@ Thus, quantifiers do not have a name for the variable or state they quantify ove
 
 datatype 'a syn_assertion =
   AConst bool
-  | AComp "'a exp" "'a comp" "'a exp"  \<comment>\<open>\<open>e \<succeq> e\<close>\<close>
-  | AForallState nat "'a syn_assertion"        \<comment>\<open>\<open>\<forall><\<phi>>i. A\<close>\<close>
-  | AExistsState nat "'a syn_assertion"        \<comment>\<open>\<open>\<exists><\<phi>>i. A\<close>\<close>
-  | AForall "'a syn_assertion"             \<comment>\<open>\<open>\<forall>y. A\<close>\<close>
-  | AExists "'a syn_assertion"             \<comment>\<open>\<open>\<exists>y. A\<close>\<close>
-  | AOr "'a syn_assertion" "'a syn_assertion"  \<comment>\<open>\<open>A \<or> A\<close>\<close>
-  | AAnd "'a syn_assertion" "'a syn_assertion" \<comment>\<open>\<open>A \<and> A\<close>\<close>
+  | AComp "'a exp" "'a comp" "'a exp"  \<comment>\<open>\<open>e \<succeq> e\<close>\<close>            
+  | AForallState nat "'a syn_assertion"        \<comment>\<open>\<open>\<forall><\<phi>>i. A\<close>\<close>  
+  | AExistsState nat "'a syn_assertion"        \<comment>\<open>\<open>\<exists><\<phi>>i. A\<close>\<close>  
+  | AForall "'a syn_assertion"             \<comment>\<open>\<open>\<forall>y. A\<close>\<close>        
+  | AExists "'a syn_assertion"             \<comment>\<open>\<open>\<exists>y. A\<close>\<close>         
+  | AOr "'a syn_assertion" "'a syn_assertion"  \<comment>\<open>\<open>A \<or> A\<close>\<close>     
+  | AAnd "'a syn_assertion" "'a syn_assertion" \<comment>\<open>\<open>A \<and> A\<close>\<close>     
 
 text \<open>We use a list of values and a list of states to track quantified values and states, respectively.\<close>
 
@@ -3183,13 +3183,14 @@ text\<open>Generalization of the conditional alignment rule from the Relational 
         b.	one case for only a single program for any possible program
     It is a weaker generalization compared to the next one.
 \<close>
+(*
 theorem while_nonfixed_alignment:
   assumes "\<Turnstile> { conj Iv (conj (holds_forall_hyper I bs) U)} [[i \<mapsto> Cs i | i \<in> I]] { Iv }" 
     and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[i \<mapsto> prog_or_skip j Cs i | i \<in> I]] { Iv }"
     and   "entails Iv (disj (disj (conj (holds_forall_hyper I bs) U) (disj_I I (\<lambda>j. conj (holds_for_prog j bs) (V j)))) (holds_forall_hyper I (lnot_hyper bs)))"
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
   sorry
-
+*)
 
 definition holds_for_prog_set where
 "holds_for_prog_set J bs = holds_forall_hyper J bs"
@@ -3202,11 +3203,13 @@ text\<open>Generalization of the conditional alignment rule from the Relational 
         a.	one lockstep case for every possible subset of programs
     It is a stronger generalization compared to the previous one and the previous one should be implied by it.
 \<close>
+(*
 theorem while_nonfixed_alignment2:
   assumes "\<forall>J\<in>(Pow I). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
     and   "entails Iv (disj (disj_I (Pow I) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
   sorry
+*)
 
 section \<open>Single sem usage simplification rules\<close>
 
@@ -3581,9 +3584,25 @@ qed
 subsection \<open>Lockstep rules\<close>
 
 
+abbreviation assign_hyper_set where
+"assign_hyper_set I Xs Es S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := (Es i) \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> (S i) } else S i))"
+
+abbreviation assign_prec where
+"assign_prec P I Xs Es S \<equiv> P (assign_hyper_set I Xs Es S)"
+
 theorem assume_lockstep:
-  shows "\<Turnstile>  { (\<lambda>S. P { (l, \<sigma>(x := e \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> S }) } [[i \<mapsto> Assign (Xs i) (Es i) |i \<in> I]] {P}"
-  sorry
+  shows "\<Turnstile>  { assign_prec P I Xs Es} [[i \<mapsto> Assign (Xs i) (Es i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "assign_prec P I Xs Es S"
+  have "assign_hyper_set I Xs Es S = (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)"
+  proof
+    fix i
+    show "assign_hyper_set I Xs Es S i = (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S) i"
+      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemAssign)
+  qed
+  with asm show "P (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)" by auto
+qed
 
 text\<open>The generalized version of the right-to-left direction of wp-seqI\<close>
 theorem seq_split_rule:
@@ -3607,8 +3626,10 @@ next
 qed
 
 
-definition refines_hyper :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> bool"where
-"refines_hyper Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_lifted Cs1 S) i \<subseteq> (sem_lifted Cs2 S) i))"
+text\<open>Refinement relation between two hyper-programs. Satisfied if all corresponding programs
+      are in the refinement relation.\<close>
+definition refines_hyper_program :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> bool"where
+"refines_hyper_program Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_lifted Cs1 S) i \<subseteq> (sem_lifted Cs2 S) i))"
 
 
 
@@ -3625,7 +3646,7 @@ fun no_exists_state :: "'a syn_assertion \<Rightarrow> bool" where
 
 
 lemma meta_refinement_rule_main:
-  assumes "refines_hyper Cs1 Cs2"
+  assumes "refines_hyper_program Cs1 Cs2"
       and "no_exists_state Q"
       and "sat_assertion vals states Q (sem_lifted Cs2 S)"
     shows "sat_assertion vals states Q (sem_lifted Cs1 S)"
@@ -3640,7 +3661,7 @@ proof -
   next
     case (AForallState x1a Q)
     then show ?case 
-      by (meson assms(1) no_exists_state.simps(3) refines_hyper_def sat_assertion.simps(3) subset_iff)
+      by (meson assms(1) no_exists_state.simps(3) refines_hyper_program_def sat_assertion.simps(3) subset_iff)
   next
     case (AExistsState x1a Q)
     then show ?case 
@@ -3664,7 +3685,7 @@ qed
 text\<open>Modified version of the rewrite_rule inspired by LHC's wp-refine. 
     It uses meta reasoning about refinement as compared to the refinement_rule below.\<close>
 theorem meta_refinement_rule:
-  assumes "refines_hyper Cs1 Cs2"
+  assumes "refines_hyper_program Cs1 Cs2"
       and "\<Turnstile> {P} [Cs2] {interp_assert Q}"
       and "no_exists_state Q"
     shows "\<Turnstile> {P} [Cs1] {interp_assert Q}"
@@ -3676,15 +3697,16 @@ proof (rule relational_hyper_hoare_tripleI)
   with assms(1) assms(3) meta_refinement_rule_main show "interp_assert Q (sem_lifted Cs1 S)" by blast
 qed
 
+
+
 definition subs_cond where
  "subs_cond i j S = ((S i) \<subseteq> (S j))"
 
 
-
 lemma refinement_rule_main:
   assumes "\<Turnstile> {subs_cond 0 1} [[0 \<mapsto> C1, 1 \<mapsto> C2]] {subs_cond 0 1}"
-  shows "refines_hyper [0 \<mapsto> C1] [0 \<mapsto> C2]"
-  unfolding refines_hyper_def
+  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
+  unfolding refines_hyper_program_def
 proof (intro allI ballI)
   fix Ss::"'a hyper_set"
   fix i
@@ -3709,6 +3731,175 @@ theorem refinement_rule:
 proof -
   from assms refinement_rule_main meta_refinement_rule show ?thesis by blast
 qed
+
+
+text\<open>Program statement which uses only syntactic program expressions and program boolean expressions.\<close>
+datatype 'a syn_stmt = 
+  AssignS var "'a pexp"
+  | SeqS "'a syn_stmt" "'a syn_stmt"                   
+  | IfS "'a syn_stmt" "'a syn_stmt"                    
+  | SkipS
+  | HavocS var                                                
+  | AssumeS "'a pbexp"
+  | WhileS "'a syn_stmt"                                   
+
+
+
+fun interp_syn_stmt :: "'a syn_stmt \<Rightarrow> (var, 'a) stmt" where
+"interp_syn_stmt (AssignS v pe) = (Assign v (interp_pexp pe))" |
+"interp_syn_stmt (SeqS C1 C2) = (Seq (interp_syn_stmt C1) (interp_syn_stmt C2))" |
+"interp_syn_stmt (IfS C1 C2) = (If (interp_syn_stmt C1) (interp_syn_stmt C2))" |
+"interp_syn_stmt (SkipS) = Skip" |
+"interp_syn_stmt (HavocS v) = (Havoc v)" |
+"interp_syn_stmt (AssumeS pb) = (Assume (interp_pbexp pb))" |
+"interp_syn_stmt (WhileS C) = (interp_syn_stmt C)"
+
+
+fun pexp_var :: "'a pexp \<Rightarrow> nat list" where
+"pexp_var (PVar v) = [v]" 
+| "pexp_var (PConst _) = []"
+| "pexp_var (PBinop pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
+| "pexp_var (PFun _ pe) = pexp_var pe"
+
+
+fun pbexp_var :: "'a pbexp \<Rightarrow> nat list" where
+"pbexp_var (PBConst _) = []"
+| "pbexp_var (PBAnd pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
+| "pbexp_var (PBOr pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
+| "pbexp_var (PBComp pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
+
+
+text\<open>Gather all variables accessed by the program (read / written).\<close>
+fun pvar :: "'a syn_stmt \<Rightarrow> nat list" where
+"pvar (AssignS v pe) = v#(pexp_var pe)" |
+"pvar (SeqS C1 C2) = (pvar C1) @ (pvar C2)" |
+"pvar (IfS C1 C2) = (pvar C1) @ (pvar C2)" |
+"pvar (SkipS) = []" |
+"pvar (HavocS v) = [v]" |
+"pvar (AssumeS pb) = pbexp_var pb" |
+"pvar (WhileS C) = pvar C"
+
+
+
+fun refinement_syn_assert_vars :: "nat list \<Rightarrow> 'a syn_assertion" where
+"refinement_syn_assert_vars [] = (AConst True)" |
+"refinement_syn_assert_vars (v#vs) = AAnd (AComp (EPVar 1 v) (=) (EPVar 0 v)) (refinement_syn_assert_vars vs)"
+
+definition refinement_syn_assert :: "nat \<Rightarrow> nat \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_assertion" where
+"refinement_syn_assert i j C1 C2 = (AForallState i (AExistsState j (refinement_syn_assert_vars ((pvar C1) @ (pvar C2)))))"
+
+text\<open>Semantic version for the syntactic assertion above\<close>
+definition refinement_assert where
+"refinement_assert i j C1 C2 S = (\<forall>(li,\<sigma>i) \<in> (S i). (\<exists>(lj,\<sigma>j)\<in>(S j). (\<forall>x \<in> (set ((pvar C1) @ (pvar C2))). (\<sigma>i x) = (\<sigma>j x))))"
+
+
+lemma refinement_syn_assert_vars_sound: "(\<forall>x \<in> (set Vs). ((snd \<sigma>) x) = ((snd \<sigma>') x)) = 
+                                          sat_assertion [] [\<sigma>', \<sigma>] (refinement_syn_assert_vars Vs) S"
+proof (induction Vs)
+  case Nil
+  then show ?case by(auto)
+next
+  case (Cons a Vs)
+  then show ?case by(auto)
+qed
+
+
+lemma refinement_syn_assert_sound: "interp_assert (refinement_syn_assert i j C1 C2) S = (refinement_assert i j C1 C2) S"
+  unfolding refinement_syn_assert_def refinement_assert_def
+  apply(auto)
+   apply (smt (verit, ccfv_threshold) case_prodI2 set_append snd_conv refinement_syn_assert_vars_sound)
+  using refinement_syn_assert_vars_sound by fastforce
+
+
+text\<open>Standard definition of the refinement relation between two programs\<close>
+definition refines_program where
+"refines_program C1 C2 = (\<forall>\<sigma> \<sigma>'. \<langle>C1, \<sigma>\<rangle> \<rightarrow> \<sigma>' \<longrightarrow> \<langle>C2, \<sigma>\<rangle> \<rightarrow> \<sigma>')"
+
+
+lemma variable_preservation:
+  assumes "\<langle>interp_syn_stmt C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+      and "x \<notin> (set (pvar C))" 
+    shows "\<sigma> x = \<sigma>' x"
+  using assms
+proof (induction C arbitrary: \<sigma> \<sigma>')
+  case (AssignS x1 x2)
+  then show ?case by(auto)
+next
+  case (SeqS C1 C2)
+  have "x \<notin> set (pvar (SeqS C1 C2)) \<Longrightarrow> x \<notin> set (pvar C1) \<and> x \<notin> set (pvar C2)" by auto
+  with SeqS show ?case
+    by (metis interp_syn_stmt.simps(2) single_sem_Seq_elim)
+next
+  case (IfS C1 C2)
+  then show ?case by auto
+next
+  case SkipS
+  then show ?case by auto
+next
+  case (HavocS x)
+  then show ?case by auto
+next
+  case (AssumeS x)
+  then show ?case by auto
+next
+  case (WhileS C)
+  then show ?case by auto
+qed
+
+lemma refinement_hyper_triple_sound:
+  assumes "\<Turnstile> {(refinement_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {(refinement_assert 0 1 C1 C2)}"
+  shows "refines_program (interp_syn_stmt C1) (interp_syn_stmt C2)"
+  unfolding refines_program_def
+proof (intro allI impI)
+  fix \<sigma> \<sigma>'
+  assume asm: "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+
+  let ?S = "\<lambda>i. (if i = 0 then {(\<sigma>,\<sigma>)} else (if i = 1 then {(\<sigma>,\<sigma>)} else {}))"
+  have "(refinement_assert 0 1 C1 C2) ?S" unfolding refinement_assert_def by(auto)
+  with assms have H: "(refinement_assert 0 1 C1 C2) (sem_lifted [0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)] ?S)"
+    using relational_hyper_hoare_tripleE by blast
+  from variable_preservation have "\<And>\<phi> \<phi>'. (\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>) \<and> (\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>') \<and> (\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x) \<Longrightarrow> \<phi> = \<phi>'"
+    apply(auto)
+  proof -
+    fix \<phi> :: "nat \<Rightarrow> 'a" and \<phi>' :: "nat \<Rightarrow> 'a"
+    assume a1: "\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x"
+    assume a2: "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>'"
+    assume "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>"
+    then have f3: "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi> n"
+      using a1 by (meson UnCI variable_preservation)
+    have "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi>' n"
+      using a2 a1 by (meson UnCI variable_preservation)
+    then show "\<phi> = \<phi>'"
+      using f3 by fastforce
+  qed
+  with H asm show "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by(auto simp add:refinement_assert_def sem_lifted_def sem_def)
+qed
+
+
+lemma refines_program_lifted:
+  assumes "refines_program C1 C2"
+  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
+  unfolding refines_hyper_program_def 
+proof (intro allI)
+  fix S i 
+  from assms show "sem_lifted [0 \<mapsto> C1] S i \<subseteq> sem_lifted [0 \<mapsto> C2] S i" unfolding refines_program_def
+    apply(auto simp add:sem_lifted_def sem_def)
+    by auto
+qed
+
+text\<open>Same as the refinement_rule but uses only syntactic hyper-assertions in the refinement hyper-triple.\<close>
+theorem refinement_syn_rule:
+  assumes "\<Turnstile> {interp_assert (refinement_syn_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {interp_assert (refinement_syn_assert 0 1 C1 C2)}"
+      and "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C2)]] {interp_assert Q}"
+      and "no_exists_state Q"
+    shows "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C1)]] {interp_assert Q}"
+proof -
+  from refinement_syn_assert_sound refinement_hyper_triple_sound refines_program_lifted assms meta_refinement_rule show ?thesis
+    by (smt (verit, ccfv_threshold) relational_hyper_hoare_tripleE relational_hyper_hoare_tripleI)
+qed
+
+
+
 
 text\<open>A symmetric rule to if_lockstep_arbitrary inspired by the right-to-left direction of LHC's wp-ifI\<close>
 theorem if_lockstep_arbitrary_sym:
