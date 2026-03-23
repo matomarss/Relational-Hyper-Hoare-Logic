@@ -3177,20 +3177,13 @@ definition prog_or_skip where
 definition disj_I where
 "disj_I I Ps S \<longleftrightarrow> (\<exists>i\<in>I. (Ps i) S)"
 
-text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
-      The rule assumes:
-        a.	one lockstep case for all programs
-        b.	one case for only a single program for any possible program
-    It is a weaker generalization compared to the next one.
-\<close>
-(*
-theorem while_nonfixed_alignment:
-  assumes "\<Turnstile> { conj Iv (conj (holds_forall_hyper I bs) U)} [[i \<mapsto> Cs i | i \<in> I]] { Iv }" 
-    and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[i \<mapsto> prog_or_skip j Cs i | i \<in> I]] { Iv }"
-    and   "entails Iv (disj (disj (conj (holds_forall_hyper I bs) U) (disj_I I (\<lambda>j. conj (holds_for_prog j bs) (V j)))) (holds_forall_hyper I (lnot_hyper bs)))"
-    shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
-  sorry
-*)
+
+text\<open>Projects out all empty sets. 
+      As a postcondition, this hyper-assertion says:
+        The postcondition P holds, if it does not consider the non-terminating programs.\<close>
+definition if_terminates where
+"if_terminates P S = (\<exists>S'. P (\<lambda>i. if (S i = {}) then (S' i) else (S i)))"
+
 
 definition holds_for_prog_set where
 "holds_for_prog_set J bs = holds_forall_hyper J bs"
@@ -3198,18 +3191,49 @@ definition holds_for_prog_set where
 definition prog_set_or_skip where
 "prog_set_or_skip J Cs i = (if i \<in> J then (Cs i) else Skip)"
 
+definition can_step_subset_or_all_finished where
+"can_step_subset_or_all_finished I bs V = (disj (disj_I (Pow I - {}) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
+
+definition can_step_any_unfinished where
+"can_step_any_unfinished I bs V S = (\<forall>i\<in>I. (holds_forall (bs i) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> (conj (holds_for_prog_set J bs) (V J) S)))"
+
+
+
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
       The rule assumes:
         a.	one lockstep case for every possible subset of programs
-    It is a stronger generalization compared to the previous one and the previous one should be implied by it.
-\<close>
-(*
-theorem while_nonfixed_alignment2:
+    It is a stronger generalization compared to the next one and the next one should be implied by it.\<close>
+theorem while_nonfixed_alignment:
   assumes "\<forall>J\<in>(Pow I). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
-    and   "entails Iv (disj (disj_I (Pow I) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
-    shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
+    and   "entails Iv (can_step_subset_or_all_finished I bs V)"
+    and   "entails Iv (can_step_any_unfinished I bs V)"
+    shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (if_terminates Iv) (holds_forall_hyper I (lnot_hyper bs))}"
+sorry
+
+
+
+definition can_step_or_all_finished where
+"can_step_or_all_finished I bs U V = (disj (disj (conj (holds_forall_hyper I bs) U) (disj_I I (\<lambda>j. conj (holds_for_prog j bs) (V j)))) (holds_forall_hyper I (lnot_hyper bs)))"
+
+definition can_step_any_unfinished' where
+"can_step_any_unfinished' I bs U V S = (\<forall>i\<in>I. (holds_forall (bs i) (S i)) \<longrightarrow> ((conj (holds_forall_hyper I bs) U) S) \<or> (conj (holds_for_prog i bs) (V i) S))"
+
+
+
+text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
+      The rule assumes:
+        a.	one lockstep case for all programs
+        b.	one case for only a single program for any possible program
+    It is a weaker generalization compared to the previous one.\<close>
+theorem while_nonfixed_alignment_single:
+  assumes "\<Turnstile> { conj Iv (conj (holds_forall_hyper I bs) U)} [[i \<mapsto> Cs i | i \<in> I]] { Iv }" 
+    and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[i \<mapsto> prog_or_skip j Cs i | i \<in> I]] { Iv }"
+    and   "entails Iv (can_step_or_all_finished I bs U V)"
+    and   "entails Iv (can_step_any_unfinished' I bs U V)"
+    shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (if_terminates Iv) (holds_forall_hyper I (lnot_hyper bs))}"
   sorry
-*)
+
+
 
 section \<open>Single sem usage simplification rules\<close>
 
