@@ -3192,7 +3192,7 @@ definition prog_set_or_skip where
 "prog_set_or_skip J Cs i = (if i \<in> J then (Cs i) else Skip)"
 
 definition can_step_subset_or_all_finished where
-"can_step_subset_or_all_finished I bs V = (disj (disj_I (Pow I - {}) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
+"can_step_subset_or_all_finished I bs V = (disj (disj_I (Pow I - {{}}) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
 
 definition can_step_any_unfinished where
 "can_step_any_unfinished I bs V S = (\<forall>i\<in>I. (holds_forall (bs i) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> (conj (holds_for_prog_set J bs) (V J) S)))"
@@ -3204,7 +3204,7 @@ text\<open>Generalization of the conditional alignment rule from the Relational 
         a.	one lockstep case for every possible subset of programs
     It is a stronger generalization compared to the next one and the next one should be implied by it.\<close>
 theorem while_nonfixed_alignment:
-  assumes "\<forall>J\<in>(Pow I). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+  assumes "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
     and   "entails Iv (can_step_subset_or_all_finished I bs V)"
     and   "entails Iv (can_step_any_unfinished I bs V)"
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (if_terminates Iv) (holds_forall_hyper I (lnot_hyper bs))}"
@@ -3219,7 +3219,6 @@ definition can_step_any_unfinished' where
 "can_step_any_unfinished' I bs U V S = (\<forall>i\<in>I. (holds_forall (bs i) (S i)) \<longrightarrow> ((conj (holds_forall_hyper I bs) U) S) \<or> (conj (holds_for_prog i bs) (V i) S))"
 
 
-
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
       The rule assumes:
         a.	one lockstep case for all programs
@@ -3230,8 +3229,120 @@ theorem while_nonfixed_alignment_single:
     and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[i \<mapsto> prog_or_skip j Cs i | i \<in> I]] { Iv }"
     and   "entails Iv (can_step_or_all_finished I bs U V)"
     and   "entails Iv (can_step_any_unfinished' I bs U V)"
+    and   "finite I \<Longrightarrow> card I > 1" 
+        (*As the rule is only meant for use for more than one program, this doesnt really hurt it. 
+          It is because otherwise we could probably not prove it using the while_nonfixed_alignment rule. 
+          This is because the lockstep case with U blends with the individual case for the one program in while_nonfixed_alignment_single in the case where I contains only that single program.
+          In non-fixed alignment rule, these cases are clearly separated.
+          Need to inspect this further however once i have the while_non_fixed_alignment rule in its final form*)
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (if_terminates Iv) (holds_forall_hyper I (lnot_hyper bs))}"
-  sorry
+proof - 
+  let ?V' = "\<lambda>J. if J = I then U else (if (card J = 1) then (\<lambda>S. (\<forall>i\<in>J. V i S)) else (\<lambda>S. False))"
+  have "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+  proof (intro allI ballI)
+    fix J
+    assume asm: "J \<in> (Pow I - {{}})"
+    with asm have "(J = I \<or> (J \<noteq> I \<and> (\<exists>i. J = {i})) \<or> (J \<noteq> I \<and> (card J \<noteq> 1)))"
+      by (meson card_1_singletonE)
+    then show "\<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+    proof (rule)
+      assume asm1: "J = I"
+      from asm1 have "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) = conj Iv (conj (holds_forall_hyper I bs) U)"
+        by (simp add: holds_for_prog_set_def)
+      moreover from asm1 have "[i \<mapsto> Cs i | i \<in> I] = [i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]"
+        apply(rule)
+        by(auto simp add:prog_set_or_skip_def map_comprehension_def asm1)
+      ultimately show ?thesis using assms(1)
+        by (simp add: relational_hyper_hoare_triple_def)
+    next
+      assume "(J \<noteq> I \<and> (\<exists>i. J = {i})) \<or> J \<noteq> I \<and> card J \<noteq> 1"
+      thus ?thesis
+      proof 
+        assume "(J \<noteq> I \<and> (\<exists>i. J = {i}))"
+        from this obtain j where asm2: "J \<noteq> I \<and> J = {j}" by auto
+        have "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) = conj Iv (conj (holds_for_prog j bs) (V j))" using asm2
+          by(auto simp add:holds_for_prog_set_def holds_for_prog_def asm2 conj_def holds_forall_hyper_def)
+        moreover from asm2 have "[i \<mapsto> prog_or_skip j Cs i | i \<in> I] = [i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]"
+          apply(rule)
+          by(auto simp add:prog_set_or_skip_def prog_or_skip_def map_comprehension_def asm2)
+        ultimately show ?thesis
+          using asm asm2 assms(2) by auto
+      next
+        assume "J \<noteq> I \<and> card J \<noteq> 1"
+        thus ?thesis
+          by (simp add: conj_def relational_hyper_hoare_triple_def)
+      qed
+    qed
+  qed
+  moreover have "entails Iv (can_step_subset_or_all_finished I bs ?V')" unfolding entails_def
+  proof(intro allI impI)
+    fix S
+    assume "Iv S"
+    with assms(3) have "(can_step_or_all_finished I bs U V) S"
+      by (simp add: entails_def)
+    thus "can_step_subset_or_all_finished I bs ?V' S" 
+        unfolding can_step_or_all_finished_def disj_def disj_I_def
+    proof 
+      assume "conj (holds_forall_hyper I bs) U S \<or> (\<exists>i\<in>I. conj (holds_for_prog i bs) (V i) S)"
+      thus ?thesis 
+      proof
+        assume "conj (holds_forall_hyper I bs) U S"
+        have "I = {} \<or> I \<noteq> {}" by auto
+        thus ?thesis 
+        proof
+          assume "I = {}"
+          hence "holds_forall_hyper I (lnot_hyper bs) S" unfolding holds_forall_hyper_def by simp
+          thus ?thesis 
+            by (simp add: can_step_subset_or_all_finished_def disj_def)
+        next
+          assume asm3: "I \<noteq> {}"
+          have "(conj (holds_for_prog_set I bs) (?V' I) S)"
+            by (simp add: \<open>Logic.conj (holds_forall_hyper I bs) U S\<close> holds_for_prog_set_def)
+          with asm3 show ?thesis
+            by(auto simp add:can_step_subset_or_all_finished_def disj_def disj_I_def)
+        qed
+      next
+        assume "\<exists>i\<in>I. conj (holds_for_prog i bs) (V i) S" 
+        from this obtain i where "i\<in>I" and H:"conj (holds_for_prog i bs) (V i) S" by auto
+        from \<open>i\<in>I\<close> have H2: "{i} \<in> (Pow I - {{}})"
+          by auto
+        from H have "(conj (holds_for_prog_set {i} bs) (?V' {i}) S)" using assms(5)
+          by(auto simp add:conj_def holds_for_prog_def holds_for_prog_set_def holds_forall_hyper_def)
+        thus ?thesis unfolding can_step_subset_or_all_finished_def 
+          apply(auto simp add: conj_def disj_def disj_I_def) using H2
+          by (smt (verit, del_insts) One_nat_def card.empty)
+      qed
+    next
+      assume "holds_forall_hyper I (lnot_hyper bs) S"
+      thus ?thesis 
+        by (simp add: can_step_subset_or_all_finished_def disj_def)
+    qed
+  qed
+  moreover have "entails Iv (can_step_any_unfinished I bs ?V')" 
+    unfolding entails_def can_step_any_unfinished_def
+  proof (intro allI impI ballI)
+    fix S i
+    assume "Iv S" and "i\<in>I" and "holds_forall (bs i) (S i)"
+    with assms(4) have "((conj (holds_forall_hyper I bs) U) S) \<or> (conj (holds_for_prog i bs) (V i) S)"
+      using can_step_any_unfinished'_def entailsE by fastforce
+    thus "\<exists>J\<in>Pow I. i \<in> J \<and> ((conj (holds_for_prog_set J bs) (?V' J)) S)"
+    proof
+      assume "conj (holds_forall_hyper I bs) U S"
+      thus ?thesis
+        by (smt (verit, ccfv_SIG) Pow_top \<open>i \<in> I\<close> holds_for_prog_set_def)
+    next
+      assume asm4: "conj (holds_for_prog i bs) (V i) S"
+      with \<open>i\<in>I\<close> have "{i}\<in>Pow I \<and> i \<in> {i}" 
+        by simp
+      from asm4 have "conj (holds_for_prog_set {i} bs) (?V' {i}) S" using assms(5) 
+        by(auto simp add:conj_def holds_for_prog_def holds_for_prog_set_def holds_forall_hyper_def)
+      thus ?thesis 
+        using \<open>{i} \<in> Pow I \<and> i \<in> {i}\<close> by blast 
+    qed
+  qed
+  ultimately show ?thesis using while_nonfixed_alignment[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="\<lambda>J. if J = I then U else (if (card J = 1) then (\<lambda>S. (\<forall>i\<in>J. V i S)) else (\<lambda>S. False))" and ?Cs="Cs"]
+    by blast
+qed
 
 
 
@@ -3977,6 +4088,7 @@ proof (rule relational_hyper_hoare_tripleI)
     by metis
   then show "reindex_assertion \<pi> Q (sem_lifted (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
 qed
+
 
 
 lemma syn_reindexing_soundness: "reindex_assertion \<pi> (interp_assert Q) = interp_assert (reindex_syn_assertion \<pi> Q)"
