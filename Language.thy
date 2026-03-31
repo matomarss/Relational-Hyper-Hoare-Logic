@@ -21,8 +21,8 @@ type_synonym ('var, 'val) exp = "('var, 'val) pstate \<Rightarrow> 'val"
 
 
 datatype ('var, 'val) stmt = 
-  Assign 'var "('var, 'val) exp"
-  | Seq "('var, 'val) stmt" "('var, 'val) stmt"  (infixl ";;" 60)
+  Assign 'var "('var, 'val) exp"                 (infix "::=" 61)
+  | Seq "('var, 'val) stmt" "('var, 'val) stmt"  (infixr ";;" 60)
   | If "('var, 'val) stmt" "('var, 'val) stmt"                    \<comment>\<open>Non-deterministic choice\<close>
   | Skip
   | Havoc 'var                                                    \<comment>\<open>Non-deterministic assignment\<close>

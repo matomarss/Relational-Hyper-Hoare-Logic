@@ -1,7 +1,7 @@
 section \<open>Syntactic Relational Assertions\<close>
 
 theory SyntacticRelationalAssertions
-  imports Logic Loops ProgramHyperproperties Compositionality "~~/src/HOL/Library/While_Combinator"
+  imports Logic Loops ProgramHyperproperties Compositionality "~~/src/HOL/Library/While_Combinator" "HOL-Computational_Algebra.Primes"
 begin
 
 subsection \<open>Preliminaries: Types, expressions, 'a syn_assertions\<close>
@@ -95,6 +95,7 @@ lemma sat_assertion_Imp:
   by (simp add: AImp_def sat_assertion_Not)
 
 abbreviation interp_assert where "interp_assert \<equiv> sat_assertion [] []"
+
 
 
 subsection \<open>Split\<close>
@@ -1759,6 +1760,7 @@ proof -
 qed
 
 
+
 theorem if_lockstep_true_sym:
   assumes "\<Turnstile> { conj P (holds_forall_hyper I bs)} [[ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }"
   shows "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
@@ -3171,9 +3173,6 @@ subsection \<open>Non-Fixed alignment rules\<close>
 definition holds_for_prog where
 "holds_for_prog j bs S \<longleftrightarrow> (\<forall>\<phi>\<in>(S j). (bs j) (snd \<phi>))"
 
-definition prog_or_skip where
-"prog_or_skip j Cs i = (if i = j then (Cs i) else Skip)"
-
 definition disj_I where
 "disj_I I Ps S \<longleftrightarrow> (\<exists>i\<in>I. (Ps i) S)"
 
@@ -3184,12 +3183,9 @@ text\<open>Projects out all empty sets.
 definition if_terminates where
 "if_terminates P S = (\<exists>S'. P (\<lambda>i. if (S i = {}) then (S' i) else (S i)))"
 
-
 definition holds_for_prog_set where
 "holds_for_prog_set J bs = holds_forall_hyper J bs"
 
-definition prog_set_or_skip where
-"prog_set_or_skip J Cs i = (if i \<in> J then (Cs i) else Skip)"
 
 abbreviation can_step_subset_or_all_finished where
 "can_step_subset_or_all_finished I bs V \<equiv> (disj (disj_I (Pow I - {{}}) (\<lambda>J. conj (holds_for_prog_set J bs) (V J))) (holds_forall_hyper I (lnot_hyper bs)))"
@@ -3278,16 +3274,45 @@ theorem while_nonfixed_alignment2:
   sorry*)
 
 
+
+abbreviation all_unfinished_can_be_stepped_after where
+"all_unfinished_can_be_stepped_after n Iv I bs V S \<equiv> (\<forall>i\<in>I. \<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S. \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> (conj (holds_for_prog_set J bs) (V J) S)))))" 
+
+theorem while_nonfixed_alignment4:
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
+      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after n Iv I bs V)"
+      and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished I bs V)"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+    shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
+sorry
+
+
+
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
       The rule assumes:
         a.	one lockstep case for every possible subset of programs
     It is a stronger generalization compared to the next one and the next one should be implied by it.\<close>
 theorem while_nonfixed_alignment3:
-  assumes   "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+  assumes   "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv }"
       and   "entails Iv (can_step_any_unfinished I bs V)"
       and   "\<Turnstile> { Iv } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
     shows   "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
-  sorry
+proof -
+  let ?Iv' = "\<lambda>n::nat. Iv"
+  from assms(1) have "\<And>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv' n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv' (Suc n) }"
+    by simp
+  moreover from assms(2) can_step_any_unfinished_can_step_subset_or_all_finished 
+      have  "\<And>n. entails (?Iv' n) (can_step_subset_or_all_finished I bs V)"
+        by blast
+  moreover from assms(2) have "\<And>n. entails (?Iv' n) (all_unfinished_can_be_stepped_after n ?Iv' I bs V)"
+        by (smt (verit, del_insts) entailsE entailsI order_refl)
+  moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+    by auto
+  ultimately show ?thesis using while_nonfixed_alignment4[where Iv = "?Iv'" and ?I="I" and ?bs="bs" and ?V="V" and ?Cs="Cs" and ?Q="Q"]
+    by blast
+qed
+
+
 
 text\<open>This is a copy of while_lockstep rule from the fixed alignment rules section. 
       However, now it is proven using solely while_nonfixed_alignment3.\<close>
@@ -3297,7 +3322,7 @@ theorem while_lockstep_copied:
 proof -
   let ?V = "\<lambda>J. if J = I then (\<lambda>S. True) else (\<lambda>S. False)"
   let ?Iv = "conj Iv (low_exp_hyper I bs)"
-  have H1: "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj ?Iv (conj (holds_for_prog_set J bs) (?V J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { ?Iv }"
+  have H1: "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj ?Iv (conj (holds_for_prog_set J bs) (?V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv }"
   proof (intro allI ballI impI relational_hyper_hoare_tripleI)
     fix J S
     assume asm: "conj ?Iv (conj (holds_for_prog_set J bs) (if J = I then (\<lambda>S. True) else (\<lambda>S. False))) S"
@@ -3310,9 +3335,9 @@ proof -
     with asm assms(1) have "conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
       unfolding relational_hyper_hoare_triple_def conj_def
       by (simp add: holds_for_prog_set_def)
-    moreover from \<open>J = I\<close> have "(map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) = (map_comprehension Cs (\<lambda>i. i \<in> I))"
-      by(auto simp add:map_comprehension_def prog_set_or_skip_def)
-    ultimately show "?Iv (sem_lifted (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S)"
+    moreover from \<open>J = I\<close> have "[i \<mapsto>  Cs i | i \<in> J] = (map_comprehension Cs (\<lambda>i. i \<in> I))"
+      by(auto simp add:map_comprehension_def)
+    ultimately show "?Iv (sem_lifted [i \<mapsto>  Cs i | i \<in> J] S)"
       by (simp add: conj_def)
   qed
   have H2: "entails ?Iv (can_step_any_unfinished I bs ?V)"
@@ -3375,7 +3400,7 @@ text\<open>Generalization of the conditional alignment rule from the Relational 
     It is indeed proven by only using while_nonfixed_alignment3.\<close>
 theorem while_nonfixed_alignment_single:
   assumes "\<Turnstile> { conj Iv (conj (holds_forall_hyper I bs) U)} [[i \<mapsto> Cs i | i \<in> I]] { Iv }" 
-    and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[i \<mapsto> prog_or_skip j Cs i | i \<in> I]] { Iv }"
+    and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[j \<mapsto> Cs j]] { Iv }"
     and   "entails Iv (can_step_any_unfinished' I bs U V)"
     and   "\<Turnstile> { Iv } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
@@ -3385,7 +3410,7 @@ proof -
   proof 
     assume asm0: "card I = 1"
     let ?V' = "\<lambda>J. disj (\<lambda>S. (\<forall>i\<in>J. V i S)) U"
-    have "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+    have "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto>  Cs i | i \<in> J]] { Iv }"
     proof (intro allI ballI)
       fix J
       assume asm: "J \<in> (Pow I - {{}})"
@@ -3394,25 +3419,25 @@ proof -
       from this obtain j where asm2: "J = {j}" by auto
       have "j\<in>I"
         using asm asm2 by auto
-      show "\<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+      show "\<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto>  Cs i | i \<in> J]] { Iv }"
       proof (intro relational_hyper_hoare_tripleI)
         fix S
         assume asm: "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) S"
         hence "((\<forall>i\<in>J. V i S)) \<or> U S"
           by (simp add: conj_def disj_def)
-        thus "Iv (sem_lifted (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S) "
+        thus "Iv (sem_lifted [i \<mapsto>  Cs i | i \<in> J] S) "
         proof
           assume "\<forall>i\<in>J. V i S"
           with asm2 have "V j S"
             by simp
           with asm have "conj Iv (conj (holds_for_prog j bs) (V j)) S"
             by (simp add: asm2 conj_def holds_for_prog_def holds_for_prog_set_def holds_forall_hyper_def)
-          with assms(2) \<open>j\<in>I\<close> have "Iv (sem_lifted (map_comprehension (prog_or_skip j Cs) (\<lambda>i. i \<in> I)) S)"
+          with assms(2) \<open>j\<in>I\<close> have "Iv (sem_lifted [j \<mapsto> Cs j] S)"
             using relational_hyper_hoare_tripleE by blast
-          moreover have "(sem_lifted (map_comprehension (prog_or_skip j Cs) (\<lambda>i. i \<in> I)) S) = (sem_lifted (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S)"
-            apply(rule)
-            using asm2
-            by(auto simp add:sem_lifted_def map_comprehension_def prog_or_skip_def prog_set_or_skip_def )
+          moreover have "(sem_lifted [j \<mapsto> Cs j] S) = sem_lifted [i \<mapsto>  Cs i | i \<in> J] S"
+            apply(rule) 
+            using asm2 \<open>j\<in>I\<close>
+            by(auto simp add:sem_lifted_def map_comprehension_def)
           ultimately show ?thesis 
             by simp
         next
@@ -3421,12 +3446,12 @@ proof -
             by (metis (lifting) \<open>j \<in> I\<close> asm0 asm2 card_1_singletonE conj_def empty_iff holds_for_prog_set_def insert_iff)
           with assms(1) have "Iv (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
             by (simp add: relational_hyper_hoare_triple_def)
-          moreover have "(sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S) = (sem_lifted (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S)"
+          moreover have "(sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S) = (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> J)) S)"
             apply(rule)
-            using asm2
-            apply(auto simp add:sem_lifted_def map_comprehension_def prog_or_skip_def prog_set_or_skip_def )
-            using \<open>j \<in> I\<close> asm0 card_1_singletonE apply auto[1]
-            using \<open>j \<in> I\<close> asm0 card_1_singletonE by blast
+            using asm2 \<open>j\<in>I\<close>
+            apply(auto simp add:sem_lifted_def map_comprehension_def)
+            using asm0 card_1_singletonE apply blast
+            using asm0 card_1_singletonE by blast
           ultimately show ?thesis  by auto
         qed
       qed
@@ -3458,20 +3483,20 @@ proof -
   next
     assume asm0: "card I \<noteq> 1"
     let ?V' = "\<lambda>J. if (J = I) then U else (if (card J = 1) then (\<lambda>S. (\<forall>i\<in>J. V i S)) else (\<lambda>S. False))"
-    have "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+    have "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto>  Cs i | i \<in> J]] { Iv }"
     proof (intro allI ballI)
       fix J
       assume asm: "J \<in> (Pow I - {{}})"
       with asm have "((J = I) \<or> (J \<noteq> I \<and> (\<exists>i. J = {i})) \<or> (J \<noteq> I \<and> (card J \<noteq> 1)))"
         by (meson card_1_singletonE)
-      then show "\<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]] { Iv }"
+      then show "\<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (?V' J))} [[i \<mapsto>  Cs i | i \<in> J]] { Iv }"
       proof (rule)
         assume asm1: "((J = I))"
         from asm1 have "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) = conj Iv (conj (holds_forall_hyper I bs) U)"
           by (simp add: holds_for_prog_set_def)
-        moreover from asm1 have "[i \<mapsto> Cs i | i \<in> I] = [i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]"
+        moreover from asm1 have "[i \<mapsto> Cs i | i \<in> I] = [i \<mapsto>  Cs i | i \<in> J]"
           apply(rule)
-          by(auto simp add:prog_set_or_skip_def map_comprehension_def asm1)
+          by(auto simp add:map_comprehension_def asm1)
         ultimately show ?thesis using assms(1)
           by (simp add: relational_hyper_hoare_triple_def)
       next
@@ -3482,9 +3507,9 @@ proof -
           from this obtain j where asm2: "J \<noteq> I \<and> J = {j}" by auto
           have "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) = conj Iv (conj (holds_for_prog j bs) (V j))" using asm2
             by(auto simp add:holds_for_prog_set_def holds_for_prog_def asm2 conj_def holds_forall_hyper_def)
-          moreover from asm2 have "[i \<mapsto> prog_or_skip j Cs i | i \<in> I] = [i \<mapsto> prog_set_or_skip J Cs i | i \<in> I]"
+          moreover from asm2 have "[j \<mapsto> Cs j] = [i \<mapsto>  Cs i | i \<in> J]"
             apply(rule)
-            by(auto simp add:prog_set_or_skip_def prog_or_skip_def map_comprehension_def asm2)
+            by(auto simp add:map_comprehension_def asm2)
           ultimately show ?thesis
             using asm asm2 assms(2) by auto
         next
@@ -3522,31 +3547,6 @@ proof -
   qed
 qed
 
-subsubsection \<open>Mini case study\<close>
-
-thm while_nonfixed_alignment3
-
-(*
-  i := 100;
-  x := 1;
-  while (i > 0) {
-     x := 4 \<^emph> x;
-     i := i − 1;
-  }
-*)
-
-(*
-  i := 100;
-  x := 1;
-  c := 0
-  while (i > 0) {
-     if(c is prime){
-     x := 4 \<^emph> x;
-     i := i − 1;
-  }
-  c := c+1
-  }
-*)
 
 
 section \<open>Single sem usage simplification rules\<close>
@@ -4337,6 +4337,540 @@ lemma reindexing_preserves_no_exist_state:
   apply (induction Q)
   apply(simp_all)
   done
+
+
+
+
+section \<open>Other useful rules\<close>
+
+
+abbreviation assume_hyper_set where
+"assume_hyper_set I Bs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>) |l \<sigma>. (l, \<sigma>) \<in> (S i) \<and> (Bs i) \<sigma>} else S i))"
+
+abbreviation assume_prec where
+"assume_prec P I Bs S \<equiv> P (assume_hyper_set I Bs S)"
+
+theorem assume_lockstep:
+  shows "\<Turnstile>  { assume_prec P I Bs} [[i \<mapsto> Assume (Bs i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "assume_prec P I Bs S"
+  have "(assume_hyper_set I Bs S) = (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S)"
+  proof
+    fix i
+    show "(assume_hyper_set I Bs S) i = (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S) i"
+      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemAssume)
+  qed
+  with asm show "P (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S)" by auto
+qed
+
+
+theorem false_prec:
+  shows "\<Turnstile> {(\<lambda>S. False)} [Cs] {Q}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "False"
+  thus "Q (sem_lifted Cs S)" by auto
+qed
+
+
+theorem skip_lockstep:
+  shows "\<Turnstile> {P} [[i \<mapsto> Skip |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "P S"
+  have eq:"(sem_lifted (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S) = S"
+    apply(rule) using SemSkip
+    by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+  show "P (sem_lifted (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S)"
+    apply(simp only:eq) using \<open>P S\<close> by auto
+qed
+
+
+
+theorem postcondition_conj:
+  assumes "\<Turnstile> {P} [Cs] {Q1}"
+      and "\<Turnstile> {P} [Cs] {Q2}"
+    shows "\<Turnstile> {P} [Cs] {conj Q1 Q2}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "P S"
+  from \<open>P S\<close> assms(1) have H1:"Q1 (sem_lifted Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE)
+  from \<open>P S\<close> assms(2) have H2:"Q2 (sem_lifted Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE)
+  show "conj Q1 Q2 (sem_lifted Cs S)"
+    by(auto simp add:conj_def H1 H2)
+qed
+
+theorem if_lockstep_trueG:
+  assumes "\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs' ++ [i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
+      and "dom Cs' \<inter> dom [i \<mapsto> (Cs1 i) | i \<in> I] = {}"
+  shows "\<Turnstile> { conj P (holds_forall_hyper I bs)} [Cs' ++ [ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }"
+proof -
+  from assms split_rule have H11:"\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs'] { wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q}"
+    by blast
+  have H10:"\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs'] { (holds_forall_hyper I bs) }" 
+    apply(intro relational_hyper_hoare_tripleI)
+    using assms(2)
+    apply(auto simp add:sem_lifted_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
+    by (metis (mono_tags, lifting) IntI assms(2) domIff empty_iff map_comprehension_def option.discI partial_sem.simps(2)
+        snd_eqD)
+  have H: "\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs'] { conj (wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q) (holds_forall_hyper I bs) }" 
+    apply(rule postcondition_conj)
+    by(auto simp add:H11 H10)
+  from assms split_rule have H20:"\<Turnstile> { wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q} [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
+    by blast
+  have  H2: "\<Turnstile> { conj (wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q) (holds_forall_hyper I bs)} [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }" 
+    apply(rule precondition_conseq[where ?P'="(wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q)"])
+    prefer 2
+    apply(simp only:H20)
+    apply(intro entailsI)
+    by(auto simp add:conj_def)
+  show ?thesis
+    apply(rule rel_extension[where ?R="conj (wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q) (holds_forall_hyper I bs)"])
+      apply(simp only:H)
+     apply(rule if_lockstep_true)
+     apply(simp only:H2)
+    using assms(2)
+    by(auto simp add:dom_def map_comprehension_def)
+qed
+
+
+theorem if_lockstep_falseG:
+  assumes "\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs' ++ [i \<mapsto> (Cs2 i) | i \<in> I]] { Q }"
+      and "dom Cs' \<inter> dom [i \<mapsto> (Cs2 i) | i \<in> I] = {}"
+  shows "\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs))} [Cs' ++ [ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }"
+proof -
+  from assms split_rule have H11:"\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs'] { wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q}"
+    by blast
+  have H10:"\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs'] { (holds_forall_hyper I (lnot_hyper bs)) }" 
+    apply(intro relational_hyper_hoare_tripleI)
+    using assms(2)
+    apply(auto simp add:sem_lifted_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
+    by (metis (mono_tags, lifting) IntI assms(2) domIff empty_iff map_comprehension_def option.discI partial_sem.simps(2)
+        snd_eqD)
+  have H: "\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs'] { conj (wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q) (holds_forall_hyper I (lnot_hyper bs)) }" 
+    apply(rule postcondition_conj)
+    by(auto simp add:H11 H10)
+  from assms split_rule have H20:"\<Turnstile> { wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q} [[i \<mapsto> (Cs2 i) | i \<in> I]] { Q }"
+    by blast
+  have  H2: "\<Turnstile> { conj (wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q) (holds_forall_hyper I (lnot_hyper bs))} [[i \<mapsto> (Cs2 i) | i \<in> I]] { Q }" 
+    apply(rule precondition_conseq[where ?P'="(wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q)"])
+    prefer 2
+    apply(simp only:H20)
+    apply(intro entailsI)
+    by(auto simp add:conj_def)
+  show ?thesis
+    apply(rule rel_extension[where ?R="conj (wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q) (holds_forall_hyper I (lnot_hyper bs))"])
+      apply(simp only:H)
+     apply(rule if_lockstep_false)
+     apply(simp add:H2)
+    using assms(2)
+    by(auto simp add:dom_def map_comprehension_def)
+qed
+
+
+
+
+
+
+section \<open>Mini case study\<close>
+
+thm while_nonfixed_alignment4
+
+definition if_then_else_skip where
+"if_then_else_skip b C = if_then_else b C Skip "
+
+
+notation if_then_else  ("IF _ THEN _ ELSE _" [0, 0, 61] 61)
+notation if_then_else_skip  ("IF _  THEN _ FI" [0, 60] 61)
+notation while_cond  ("WHILE _ DO _" [0, 61] 61)
+
+
+abbreviation four_to_hundred :: "nat \<Rightarrow> nat \<Rightarrow> (nat, nat) stmt" where
+"four_to_hundred i x \<equiv>  
+  i ::= (\<lambda>s. 100);;
+  x ::= (\<lambda>s. 1);;
+  WHILE (\<lambda>s. (s i) > 0) DO (
+     x ::= (\<lambda>s. 4*(s x));;
+     i ::= (\<lambda>s. (s i) - 1)
+    )
+"
+
+
+abbreviation four_to_hundred_prime :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, nat) stmt" where
+"four_to_hundred_prime i x c \<equiv>  
+  i ::= (\<lambda>s. 100);;
+  x ::= (\<lambda>s. 1);;
+  c ::= (\<lambda>s. 0);;
+  WHILE (\<lambda>s. (s i) > 0) DO (
+     IF (\<lambda>s. prime (s c)) THEN (
+       x ::= (\<lambda>s. 4*(s x));;
+       i ::= (\<lambda>s. (s i) - 1)
+     ) FI;;
+    c ::= (\<lambda>s. (s c) + 1)
+  )
+"
+
+
+lemma entails_conj:
+   assumes "entails P Q1"
+    and "entails P Q2"
+  shows "entails P (conj Q1 Q2)"
+  using assms 
+  apply(intro entailsI)
+  by(auto simp add:entails_def conj_def)
+
+proposition
+  fixes i::nat and x::nat and c::nat
+  assumes "i \<noteq> x \<and> x \<noteq> c \<and> i \<noteq> c"
+  shows "(\<Turnstile>  {(\<lambda>S::nat hyper_set. \<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x))} 
+            [[0 \<mapsto> four_to_hundred i x, 1 \<mapsto> four_to_hundred_prime i x c]::nat hyper_program] 
+             {(\<lambda>S::nat hyper_set. \<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x))})"
+proof -
+  let ?Cs = "[0 \<mapsto> four_to_hundred i x, 1 \<mapsto> four_to_hundred_prime i x c]::nat hyper_program"
+  let ?Cs1 = "[0 \<mapsto> i ::= (\<lambda>s. 100), 1 \<mapsto> i ::= (\<lambda>s. 100)]::nat hyper_program"
+  let ?Cs2 = "[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)]::nat hyper_program"
+  let ?Cs3 = "[ 0 \<mapsto> WHILE (\<lambda>s. (s i) > 0) DO (
+                         x ::= (\<lambda>s. 4*(s x));;
+                         i ::= (\<lambda>s. (s i) - 1)
+                     ),
+                1 \<mapsto>  c ::= (\<lambda>s. 0);;
+                      WHILE (\<lambda>s. (s i) > 0) DO (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. 4*(s x));;
+                           i ::= (\<lambda>s. (s i) - 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1)
+                      )]::nat hyper_program"
+  let ?Loops = "[ 0 \<mapsto> WHILE (\<lambda>s. (s i) > 0) DO (
+                         x ::= (\<lambda>s. 4*(s x));;
+                         i ::= (\<lambda>s. (s i) - 1)
+                     ),
+                1 \<mapsto>  WHILE (\<lambda>s. (s i) > 0) DO (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. 4*(s x));;
+                           i ::= (\<lambda>s. (s i) - 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1)
+                      )]::nat hyper_program"
+  let ?Loop2 = "(WHILE (\<lambda>s. (s i) > 0) DO (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. 4*(s x));;
+                           i ::= (\<lambda>s. (s i) - 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1)
+                      ))::(nat, nat) stmt"
+  let ?conds = "\<lambda>j::nat. (\<lambda>s::(nat, nat) pstate. (s i) > 0)"
+  let ?bodies = "\<lambda>j::nat. if j = 0 then    x ::= (\<lambda>s::(nat, nat) pstate. 4*(s x));;
+                                      i ::= (\<lambda>s. (s i) - 1) 
+                      else            IF (\<lambda>s. prime (s c)) THEN (
+                                        x ::= (\<lambda>s. 4*(s x));;
+                                        i ::= (\<lambda>s. (s i) - 1)
+                                      ) FI;;
+                                      c ::= (\<lambda>s. (s c) + 1)"
+  let ?C1.1 = "[1 \<mapsto> IF (\<lambda>s. prime (s c)) THEN (
+                                        x ::= (\<lambda>s. 4*(s x));;
+                                        i ::= (\<lambda>s. (s i) - 1)
+                                      ) FI]::nat hyper_program"
+  let ?C1.2 = "[1 \<mapsto> c ::= (\<lambda>s. (s c) + 1)]::nat hyper_program"
+  let ?LBs.1 = "[0 \<mapsto> x ::= (\<lambda>s::(nat, nat) pstate. 4*(s x));; i ::= (\<lambda>s. (s i) - 1),
+                 1 \<mapsto> IF (\<lambda>s. prime (s c)) THEN (
+                                        x ::= (\<lambda>s. 4*(s x));;
+                                        i ::= (\<lambda>s. (s i) - 1)
+                                      ) FI]::nat hyper_program"
+  let ?LBs.2 = "[1 \<mapsto> c ::= (\<lambda>s. (s c) + 1)]::nat hyper_program"
+  let ?Iv_p1 = "(\<lambda>S::nat hyper_set. (\<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x) \<and> (\<sigma>0 i) = (\<sigma>1 i))
+                                          \<and>
+                (\<forall>(l0,\<sigma>0) \<in> (S 0). \<forall>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 i) > 0 \<longleftrightarrow> (\<sigma>1 i) > 0)
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>0' i) > 0)
+                                          \<and>
+                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) > 0 \<longleftrightarrow> (snd \<sigma>1' i) > 0))"
+  let ?Iv = "(\<lambda>n::nat. (\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i))
+                                          \<and>
+                (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>1 i) > 0)
+\<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>0' i) > 0)
+                                          \<and>
+                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) > 0 \<longleftrightarrow> (snd \<sigma>1' i) > 0)
+                                          \<and>
+                          (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 c) = n)))"
+  have eq0: "?Cs = hyper_seq ?Cs1 (hyper_seq ?Cs2 ?Cs3)" apply(rule) unfolding hyper_seq_def
+    by(auto)
+  (*Step 1*)
+  show ?thesis
+    apply(simp only:eq0)
+  proof(rule lockstep_seq[where ?R = "?Iv_p1"])
+    have eq1: "[0 \<mapsto> i ::= (\<lambda>s. 100), 1 \<mapsto> i ::= (\<lambda>s. 100)] = [j \<mapsto> (\<lambda>j. i ::= (\<lambda>s. 100)) j | j \<in> {0,1}]"
+      apply(rule)
+      by(auto simp add:map_comprehension_def)
+    show "\<Turnstile> {(\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0.\<exists>(l1, \<sigma>1)\<in>S 1.\<sigma>0 x = \<sigma>1 x)} 
+                  [[0 \<mapsto> i ::= (\<lambda>s. 100),1 \<mapsto> i ::= (\<lambda>s. 100)]] 
+             {?Iv_p1}"
+    apply(simp only:eq1)
+    apply(rule precondition_conseq)
+    prefer 2
+    apply(rule assign_lockstep)
+    using assms
+    apply(auto simp add: entails_def)
+    by fastforce
+  next
+    (*Step 2*)
+    show "\<Turnstile> {?Iv_p1} 
+                            [(hyper_seq ?Cs2 ?Cs3)::nat hyper_program] 
+                {\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x}"
+    proof (rule lockstep_seq[where ?R = "?Iv_p1"])
+      have eq2: "[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)] = [j \<mapsto> (\<lambda>j. x ::= (\<lambda>s. 1)) j | j \<in> {0,1}]"
+        apply(rule)
+        by(auto simp add:map_comprehension_def)
+      show "\<Turnstile> {?Iv_p1} 
+                    [[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)]] 
+               {?Iv_p1}"
+      apply(simp only:eq2)
+      apply(rule precondition_conseq)
+      prefer 2
+      apply(rule assign_lockstep)
+        using assms
+        unfolding entails_def
+        apply(intro allI impI conjI)
+           apply fastforce
+          apply fastforce
+         apply fastforce
+        by (smt (z3) fun_upd_apply mem_Collect_eq snd_conv)
+    next 
+      (*Step 3*)
+      show "\<Turnstile> {?Iv_p1} 
+                                         [?Cs3::nat hyper_program] 
+                  {\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x}"
+        apply(rule progress_any[where ?i="1" and ?R = "?Iv 0"])
+    
+        apply(simp del: add_Suc_right One_nat_def)
+      proof -
+        have eq3: "[1 \<mapsto> c ::= (\<lambda>s. 0)] = [j \<mapsto> (\<lambda>j. c ::= (\<lambda>s. 0)) j | j \<in>{1}]"
+          apply(rule)
+          by(auto simp add:map_comprehension_def)
+        show "\<Turnstile> {?Iv_p1} [[1 \<mapsto> c ::= (\<lambda>s. 0)]] {?Iv 0}"
+          apply(simp only:eq3)
+          apply(rule precondition_conseq)
+           prefer 2
+           apply(rule assign_lockstep)
+          using assms
+        unfolding entails_def
+        apply(intro allI impI conjI)
+           apply fastforce
+          apply fastforce
+          apply fastforce
+         apply (smt (z3) fun_upd_apply mem_Collect_eq snd_conv)
+        by auto
+      next
+        have eq4: "?Cs3(1 \<mapsto> ?Loop2) = ?Loops"
+          apply(rule)
+          by(auto simp add:map_comprehension_def)
+        have eq5: "?Loops = [j \<mapsto> while_cond (?conds j) (?bodies j) | j \<in> {0::nat,1::nat}]" 
+          apply(rule)
+          by(auto simp add:map_comprehension_def)
+        (*Step 4*)
+        let ?Q = "\<lambda>S::nat hyper_set. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x"
+        let ?V = "\<lambda>J::nat set. if J = {0,1} then (\<lambda>S::nat hyper_set. (\<forall>(\<sigma>1)\<in>(S 1). prime ((snd \<sigma>1) c))) else (
+                      if J = {1} then (\<lambda>S::nat hyper_set. (\<forall>\<sigma>1\<in>(S 1). \<not>prime ((snd \<sigma>1) c))) else (\<lambda>S::nat hyper_set. False))"
+        show "\<Turnstile> {?Iv 0} [?Cs3(1 \<mapsto> ?Loop2)] {?Q}"
+          apply(simp only:eq4)
+          apply(simp only:eq5)
+          apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper ?conds))"])
+           apply (simp add: entail_conj_weaken)
+          apply(rule while_nonfixed_alignment4[where V = "?V" and Q = "?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
+        proof -
+          (*Step 4.1*)
+          show "\<forall>n. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
+          proof (intro allI ballI)
+            fix n 
+            fix J ::"nat set"
+            assume "J\<in>(Pow {0,1} - {{}})"
+            hence "J = {0} \<or> J = {1} \<or> J = {0,1}" by auto
+            thus " \<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
+            proof (elim disjE)
+              assume "J = {0}"
+              (*Step 4.1.1*)
+              show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
+                apply(rule precondition_conseq[where ?P'="\<lambda>S. False"])
+                 prefer 2
+                 apply(rule false_prec)
+                apply(intro entailsI)
+                unfolding conj_def
+                using \<open>J = {0}\<close>
+                by(auto)
+            next
+              assume "J = {1}"
+              have eq:"[i \<mapsto> ?bodies i | i \<in> J] = hyper_seq ?C1.1 ?C1.2"
+                apply(rule) using \<open>J = {1}\<close> unfolding hyper_seq_def by(auto simp add: map_comprehension_def)
+              have eq1:"?C1.1 = [ j \<mapsto> (if_then_else ((\<lambda>j. \<lambda>s. prime (s c)) j) ((\<lambda>j. x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1)) j) ((\<lambda>j. Skip) j)) | j \<in> {1} ]"
+                apply(rule)
+                by(auto simp add:map_comprehension_def if_then_else_def if_then_else_skip_def)
+              have eq2: "?C1.2 = [j \<mapsto> (\<lambda>j. c ::= (\<lambda>s. s c + 1)) j | j \<in> {1}]"
+                apply(rule)
+                by(auto simp add:map_comprehension_def)
+              (*Step 4.1.2*)
+              show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
+                apply(simp only:eq)
+                apply(rule lockstep_seq[where ?R="conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))"])
+                 apply(simp only:eq1)
+                 apply(rule precondition_conseq[where ?P'="conj (conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))) (holds_forall_hyper {1} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))"])
+                  prefer 2
+                  apply(rule if_lockstep_false)
+                  apply(rule postcondition_conseq)
+                   prefer 2
+                   apply(rule skip_lockstep)
+                  apply(intro entailsI)
+                unfolding conj_def
+                  apply meson
+                 apply(intro entailsI)
+                unfolding holds_for_prog_set_def holds_forall_hyper_def lnot_hyper_def
+                 apply (smt (z3) \<open>J = {1}\<close> bot_nat_0.not_eq_extremum empty_iff insert_iff less_numeral_extra(1))
+                apply(rule precondition_conseq)
+                 prefer 2
+                apply(simp only:eq2)
+                 apply(rule assign_lockstep)
+                apply(intro entailsI conjI impI)
+                using assms(1)
+                apply(simp)
+                apply fastforce
+                using assms(1)
+                apply(simp (no_asm))
+                apply fastforce
+                apply (meson singletonD zero_neq_one)
+                 apply(simp (no_asm))
+                apply (metis (no_types, opaque_lifting) One_nat_def fun_upd_def snd_conv)
+                apply(simp (no_asm))
+                by (metis One_nat_def fun_upd_same snd_conv)
+            next
+              assume "J = {0, 1}"
+              have eq:"[i \<mapsto> ?bodies i | i \<in> J] = hyper_seq ?LBs.1 ?LBs.2"
+                apply(rule)
+                using \<open>J = {0, 1}\<close>
+                by(auto simp add:map_comprehension_def hyper_seq_def)
+              have eq1:"?LBs.1 = [0 \<mapsto> x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1)] 
+                            ++ [j \<mapsto> (\<lambda>j. IF \<lambda>s. prime (s c)  THEN x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1) ELSE Skip) j | j \<in> {1}]"
+                apply(rule)
+                by(auto simp add:map_add_def map_comprehension_def if_then_else_skip_def)
+              (*Step 4.1.3*)
+              show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
+                apply(simp only:eq)
+                apply(rule lockstep_seq[where ?R="\<lambda>S. True"])
+                 apply(simp only:eq1)
+                 apply(rule precondition_conseq)
+                prefer 2
+                  apply(rule if_lockstep_trueG[where ?P="conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))"])
+                   prefer 2
+                   apply(simp add:dom_def map_comprehension_def)
+                  prefer 2
+                  apply(rule entails_conj)
+                  apply(intro entailsI)
+                apply(simp)
+                  apply(intro entailsI)
+                unfolding conj_def holds_forall_hyper_def
+                using \<open>J = {0, 1}\<close>
+                  apply(simp add:conj_def)
+                apply fastforce
+          qed
+        next
+          (*Step 4.2*)
+          show "\<forall>n. entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)" 
+          proof
+            fix n::nat
+            from bigger_prime obtain n' where "n \<le> n'" and "prime n'" 
+              using order_less_imp_le by blast
+            show "entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)"
+            proof(intro allI ballI impI entailsI conjI exI)
+              from \<open>n \<le> n'\<close> show "n \<le> n'" by auto
+            next
+              fix S 
+              fix i'::nat
+              fix S'
+              assume "?Iv n S" and "?Iv n' S'" and "i' \<in> {0,1}" and hfa:"\<not> holds_forall (lnot (\<lambda>s. 0 < s i)) (S' i')"
+              from \<open>?Iv n' S'\<close> hfa have H1: "(holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i)) S'" 
+                unfolding holds_for_prog_set_def holds_forall_def lnot_def holds_forall_hyper_def
+                using \<open>i' \<in> {0, 1}\<close> by blast
+              from \<open>?Iv n' S'\<close>  \<open>prime n'\<close> have H2: "\<forall>\<sigma>1\<in>S' 1. prime (snd \<sigma>1 c)" by fastforce
+              show "\<exists>J\<in>Pow {0, 1}. i' \<in> J \<and> conj (holds_for_prog_set J (\<lambda>j s. 0 < s i))
+                (if J = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)
+                 else if J = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False))
+                  S'"
+              proof 
+                show "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i))
+                (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c) else if {0,1} = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False)) S'"
+                  using H1 H2 \<open>i' \<in> {0,1}\<close>
+                  by(auto simp add:conj_def)
+              next
+                show "{0, 1} \<in> Pow {0, 1} " by auto
+              qed
+            qed
+          qed
+        next
+          (*Step 4.3*)
+          show "\<forall>n. entails (?Iv n) (can_step_subset_or_all_finished {0,1} ?conds ?V)" 
+          proof(intro allI entailsI)
+            fix n S
+            assume asm:"?Iv n S"
+            from asm have "(\<forall>\<sigma>0\<in>S 0. \<not>(0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(0 < snd \<sigma>1 i)) \<or> (\<forall>\<sigma>0\<in>S 0. (0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. (0 < snd \<sigma>1 i))"
+              by blast
+            thus "(can_step_subset_or_all_finished {0,1} ?conds ?V) S" 
+            proof
+              assume asm:"(\<forall>\<sigma>0\<in>S 0. \<not>(0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(0 < snd \<sigma>1 i))"
+              show ?thesis
+                unfolding disj_def
+                apply (rule disjI2)
+                unfolding holds_forall_hyper_def lnot_hyper_def
+                using asm
+                by(auto)
+            next
+              assume asm1: "(\<forall>\<sigma>0\<in>S 0. 0 < snd \<sigma>0 i) \<and> (\<forall>\<sigma>1\<in>S 1. 0 < snd \<sigma>1 i)"
+              from asm have "(\<forall>\<sigma>1\<in>S 1. prime ((snd \<sigma>1) c)) \<or> (\<forall>\<sigma>1\<in>S 1. \<not>prime ((snd \<sigma>1) c))" by auto
+              thus ?thesis
+              proof(rule)
+                assume asm2: "\<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)"
+                with asm1 have "(\<forall>\<sigma>0\<in>S 0. 0 < snd \<sigma>0 i) \<and> (\<forall>\<sigma>1\<in>S 1. 0 < snd \<sigma>1 i) \<and> (\<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c))" by auto
+                show ?thesis unfolding disj_def disj_I_def conj_def holds_for_prog_set_def holds_forall_hyper_def
+                  apply (rule disjI1)
+                proof
+                  from asm1 asm2 show "(\<forall>ia\<in>{0,1}. \<forall>\<phi>\<in>S ia. 0 < snd \<phi> i) \<and> (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c) else if {0,1} = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False)) S"
+                    by simp
+                next 
+                  show "{0, 1} \<in> Pow {0, 1} - {{}}" by auto
+                qed
+              next
+                assume asm2: "\<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c)"
+                with asm1 have "(\<forall>\<sigma>1\<in>S 1. 0 < snd \<sigma>1 i) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>prime (snd \<sigma>1 c))" by auto
+                show ?thesis unfolding disj_def disj_I_def conj_def holds_for_prog_set_def holds_forall_hyper_def
+                  apply (rule disjI1)
+                proof
+                  from asm1 asm2 show "(\<forall>ia\<in>{1::nat}. \<forall>\<phi>\<in>S ia. 0 < snd \<phi> i) \<and> (if {1::nat} = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c) else if {1} = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False)) S"
+                    by(auto)
+                next
+                  show "{1} \<in> Pow {0, 1} - {{}}" by auto
+                qed
+              qed
+            qed
+          qed
+        next
+          (*Step 4.4*)
+          show "\<forall>n. \<Turnstile> { (?Iv n)} [[i \<mapsto> Assume (lnot (?conds i)) | i \<in> {0,1}]] { ?Q }" 
+            apply(intro allI)
+            apply(rule precondition_conseq[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i)))"])
+             apply(intro entailsI)
+             apply simp
+            apply(rule precondition_conseq)
+            prefer 2
+             apply(rule assume_lockstep)
+            apply(intro entailsI)
+            unfolding lnot_def
+            by fastforce
+        qed
+      qed
+    qed
+  qed
+qed
 
 
 
