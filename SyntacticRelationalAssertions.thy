@@ -4581,20 +4581,24 @@ proof -
                                         i ::= (\<lambda>s. (s i) - 1)
                                       ) FI]::nat hyper_program"
   let ?LBs.2 = "[1 \<mapsto> c ::= (\<lambda>s. (s c) + 1)]::nat hyper_program"
+  let ?LBs1p1 = "[0 \<mapsto> x ::= (\<lambda>s::(nat, nat) pstate. 4*(s x)),
+                   1 \<mapsto> x ::= (\<lambda>s::(nat, nat) pstate. 4*(s x))]::nat hyper_program"
+  let ?LBs1p2 = "[0 \<mapsto> i ::= (\<lambda>s. (s i) - 1),
+                   1 \<mapsto> i ::= (\<lambda>s. (s i) - 1)]::nat hyper_program"
   let ?Iv_p1 = "(\<lambda>S::nat hyper_set. (\<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x) \<and> (\<sigma>0 i) = (\<sigma>1 i))
                                           \<and>
-                (\<forall>(l0,\<sigma>0) \<in> (S 0). \<forall>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 i) > 0 \<longleftrightarrow> (\<sigma>1 i) > 0)
+                (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i))
                                           \<and>
-                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>0' i) > 0)
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) = (snd \<sigma>0' i))
                                           \<and>
-                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) > 0 \<longleftrightarrow> (snd \<sigma>1' i) > 0))"
+                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) = (snd \<sigma>1' i)))"
   let ?Iv = "(\<lambda>n::nat. (\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i))
                                           \<and>
-                (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>1 i) > 0)
-\<and>
-                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) > 0 \<longleftrightarrow> (snd \<sigma>0' i) > 0)
+                (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i))
                                           \<and>
-                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) > 0 \<longleftrightarrow> (snd \<sigma>1' i) > 0)
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>0' \<in> (S 0). (snd \<sigma>0 i) = (snd \<sigma>0' i))
+                                          \<and>
+                 (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1). (snd \<sigma>1 i) = (snd \<sigma>1' i))
                                           \<and>
                           (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 c) = n)))"
   have eq0: "?Cs = hyper_seq ?Cs1 (hyper_seq ?Cs2 ?Cs3)" apply(rule) unfolding hyper_seq_def
@@ -4635,10 +4639,15 @@ proof -
         using assms
         unfolding entails_def
         apply(intro allI impI conjI)
-           apply fastforce
-          apply fastforce
-         apply fastforce
-        by (smt (z3) fun_upd_apply mem_Collect_eq snd_conv)
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) by(fastforce) qed
+         apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) by(fastforce) qed
+        apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) by(fastforce) qed
+        done
     next 
       (*Step 3*)
       show "\<Turnstile> {?Iv_p1} 
@@ -4659,11 +4668,17 @@ proof -
           using assms
         unfolding entails_def
         apply(intro allI impI conjI)
-           apply fastforce
-          apply fastforce
-          apply fastforce
-         apply (smt (z3) fun_upd_apply mem_Collect_eq snd_conv)
-        by auto
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(2) assms(1) by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms(1) by(fastforce) qed
+         apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms(1) by(fastforce) qed
+        apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms(1) by(fastforce) qed
+        apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms(1) by(fastforce) qed
+        done
       next
         have eq4: "?Cs3(1 \<mapsto> ?Loop2) = ?Loops"
           apply(rule)
@@ -4733,17 +4748,17 @@ proof -
                 apply(simp only:eq2)
                  apply(rule assign_lockstep)
                 apply(intro entailsI conjI impI)
-                using assms(1)
-                apply(simp)
-                apply fastforce
-                using assms(1)
-                apply(simp (no_asm))
-                apply fastforce
-                apply (meson singletonD zero_neq_one)
-                 apply(simp (no_asm))
-                apply (metis (no_types, opaque_lifting) One_nat_def fun_upd_def snd_conv)
-                apply(simp (no_asm))
-                by (metis One_nat_def fun_upd_same snd_conv)
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(1) assms(1) by(fastforce) qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(4) assms(1) by(fastforce) qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(5) assms(1) by(fastforce) qed
+                 apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(6) assms(1) by(fastforce) qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(7) assms(1) by(fastforce) qed
+                done
             next
               assume "J = {0, 1}"
               have eq:"[i \<mapsto> ?bodies i | i \<in> J] = hyper_seq ?LBs.1 ?LBs.2"
@@ -4754,10 +4769,23 @@ proof -
                             ++ [j \<mapsto> (\<lambda>j. IF \<lambda>s. prime (s c)  THEN x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1) ELSE Skip) j | j \<in> {1}]"
                 apply(rule)
                 by(auto simp add:map_add_def map_comprehension_def if_then_else_skip_def)
+              have eq2: "[0 \<mapsto> x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1)] 
+                            ++ [j \<mapsto> (\<lambda>j. x ::= (\<lambda>s. 4 * s x) ;; i ::= (\<lambda>s. s i - 1)) j | j \<in> {1}] = hyper_seq ?LBs1p1 ?LBs1p2"
+                apply(rule)
+                by(auto simp add:map_add_def map_comprehension_def hyper_seq_def)
+              have eq3: "[0 \<mapsto> x ::= (\<lambda>s. 4 * s x), 1 \<mapsto>x ::= (\<lambda>s. 4 * s x)] = [j \<mapsto> (\<lambda>j. x ::= (\<lambda>s. 4 * s x)) j | j \<in> {0,1}]"
+                apply(rule)
+                by(auto simp add: map_comprehension_def)
+              have eq4: "[0 \<mapsto> i ::= (\<lambda>s. s i - 1), 1 \<mapsto>i ::= (\<lambda>s. s i - 1)] = [j \<mapsto> (\<lambda>j. i ::= (\<lambda>s. s i - 1)) j | j \<in> {0,1}]"
+                apply(rule)
+                by(auto simp add: map_comprehension_def)
+              have eq5: "[ 1 \<mapsto> c ::= (\<lambda>s. s c + 1)] = [j \<mapsto> (\<lambda>j. c ::= (\<lambda>s. s c + 1)) j | j \<in> {1}]"
+                apply(rule)
+                by(auto simp add: map_comprehension_def)
               (*Step 4.1.3*)
               show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
                 apply(simp only:eq)
-                apply(rule lockstep_seq[where ?R="\<lambda>S. True"])
+                apply(rule lockstep_seq[where ?R="(?Iv n)"])
                  apply(simp only:eq1)
                  apply(rule precondition_conseq)
                 prefer 2
@@ -4772,7 +4800,56 @@ proof -
                 unfolding conj_def holds_forall_hyper_def
                 using \<open>J = {0, 1}\<close>
                   apply(simp add:conj_def)
-                apply fastforce
+                  apply fastforce
+                 apply(simp only:eq2)
+                 apply(rule lockstep_seq[where ?R = "(?Iv n)"])
+                  apply(rule precondition_conseq)
+                   prefer 2
+                apply(simp only:eq3)
+                apply(rule assign_lockstep)
+                apply(intro entailsI allI impI conjI)
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(2) assms(1) by fastforce qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(5) assms(1) by fastforce qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(6) assms(1) by fastforce qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(7) assms(1) by fastforce qed
+                apply(erule conjE)+
+                subgoal premises prems proof - show ?thesis using prems(8) assms(1) by fastforce qed
+                apply(simp only: eq4)
+                 apply(rule precondition_conseq)
+                  prefer 2
+                  apply(rule assign_lockstep)
+                 apply(intro entailsI allI impI conjI)
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(1) by fastforce qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(2) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(3) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(4) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(5) assms(1) by fastforce qed
+                 apply(simp only:eq5)
+                 apply(rule precondition_conseq)
+                  prefer 2
+                  apply (rule assign_lockstep)
+                 apply(intro entailsI conjI impI allI)
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(1) assms(1) by fastforce qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(2) assms(1) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(3) assms(1) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(4) by fastforce  qed
+                 apply(erule conjE)+
+                 subgoal premises prems proof - show ?thesis using prems(5) assms(1) by fastforce qed
+                 done           
+            qed
           qed
         next
           (*Step 4.2*)
@@ -4791,7 +4868,8 @@ proof -
               assume "?Iv n S" and "?Iv n' S'" and "i' \<in> {0,1}" and hfa:"\<not> holds_forall (lnot (\<lambda>s. 0 < s i)) (S' i')"
               from \<open>?Iv n' S'\<close> hfa have H1: "(holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i)) S'" 
                 unfolding holds_for_prog_set_def holds_forall_def lnot_def holds_forall_hyper_def
-                using \<open>i' \<in> {0, 1}\<close> by blast
+                using \<open>i' \<in> {0, 1}\<close>
+                by (metis empty_iff insert_iff)
               from \<open>?Iv n' S'\<close>  \<open>prime n'\<close> have H2: "\<forall>\<sigma>1\<in>S' 1. prime (snd \<sigma>1 c)" by fastforce
               show "\<exists>J\<in>Pow {0, 1}. i' \<in> J \<and> conj (holds_for_prog_set J (\<lambda>j s. 0 < s i))
                 (if J = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)
@@ -4814,7 +4892,7 @@ proof -
             fix n S
             assume asm:"?Iv n S"
             from asm have "(\<forall>\<sigma>0\<in>S 0. \<not>(0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(0 < snd \<sigma>1 i)) \<or> (\<forall>\<sigma>0\<in>S 0. (0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. (0 < snd \<sigma>1 i))"
-              by blast
+              by metis
             thus "(can_step_subset_or_all_finished {0,1} ?conds ?V) S" 
             proof
               assume asm:"(\<forall>\<sigma>0\<in>S 0. \<not>(0 < snd \<sigma>0 i)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(0 < snd \<sigma>1 i))"
@@ -4859,7 +4937,7 @@ proof -
             apply(intro allI)
             apply(rule precondition_conseq[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i)))"])
              apply(intro entailsI)
-             apply simp
+             apply fastforce
             apply(rule precondition_conseq)
             prefer 2
              apply(rule assume_lockstep)
