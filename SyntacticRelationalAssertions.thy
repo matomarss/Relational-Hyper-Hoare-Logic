@@ -1593,11 +1593,11 @@ proof (rule hyper_ascendingI_direct)
 qed
 
 definition hyper_union where
-  "hyper_union S i = (\<Union>n. S i n)"
+  "hyper_union Ss i = (\<Union>n. Ss n i)"
 
 
 definition relational_upwards_closed where
-  "relational_upwards_closed I P P_inf \<longleftrightarrow> (\<forall>S. hyper_ascending I S \<and> (\<forall>n. P n (S n)) \<longrightarrow> P_inf (hyper_union S))"
+  "relational_upwards_closed I P P_inf \<longleftrightarrow> (\<forall>Ss. hyper_ascending I Ss \<and> (\<forall>n. P n (Ss n)) \<longrightarrow> P_inf (hyper_union Ss))"
 
 lemma relational_upwards_closedI:
   assumes "\<And>S. hyper_ascending I S \<Longrightarrow> (\<forall>n. P n (S n)) \<Longrightarrow> P_inf (hyper_union S)"
@@ -3278,14 +3278,110 @@ theorem while_nonfixed_alignment2:
 abbreviation all_unfinished_can_be_stepped_after where
 "all_unfinished_can_be_stepped_after n Iv I bs V S \<equiv> (\<forall>i\<in>I. \<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S. \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> (conj (holds_for_prog_set J bs) (V J) S)))))" 
 
-theorem while_nonfixed_alignment4:
+thm relational_upwards_closed_def
+
+(*theorem while_nonfixed_alignment4:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished I bs V)"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
     shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
 sorry
+*)
 
+abbreviation all_unfinished_can_be_stepped_after2 where
+"all_unfinished_can_be_stepped_after2 n Iv I bs V S \<equiv> (\<forall>i\<in>I. \<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S. \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> ((V J) S)))))" 
+
+abbreviation can_step_subset_or_all_finished2 where
+"can_step_subset_or_all_finished2 I bs V \<equiv> (disj (disj_I (Pow I - {{}}) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
+
+
+fun sem_lifted_stacked where
+"sem_lifted_stacked bs Cs S Js 0 = S" |
+"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> Js (Suc n)] (sem_lifted_stacked bs Cs S Js n)"
+
+
+theorem while_nonfixed_alignment6:
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
+      and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs V)"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q n }"
+      and   "relational_upwards_closed I Q Q_inf"
+    shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+proof(intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "Iv 0 S"
+  let ?Ss = "sem_lifted_stacked bs Cs S"
+  let ?Ss' = "\<lambda>Js. \<lambda>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n)"
+
+  have "\<exists>Js::nat \<Rightarrow> nat set. (\<forall>n::nat. (Js n) \<in> (Pow I - {{}})) \<and> 
+        (\<forall>n::nat. (Iv n) (?Ss Js n) \<and> ((V (Js (Suc n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n))) \<and>
+        sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' Js)" 
+    sorry
+  from this obtain Js where js_org:"(\<forall>n::nat. (Js n) \<in> (Pow I - {{}}))" and 
+        ss_prop:"(\<forall>n::nat. (Iv n) (?Ss Js n) \<and> ((V (Js (Suc n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n)))" and
+        wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' Js)" by blast
+  have q_ss': "\<forall>n::nat. (Q n) (?Ss' Js n)" 
+  proof
+    fix n
+    from ss_prop have "(Iv n) (?Ss Js n)" by auto
+    with assms(4) show "(Q n) (?Ss' Js n)" unfolding relational_hyper_hoare_triple_def by auto
+  qed
+  have hasc_ss':"hyper_ascending I (?Ss' Js)" 
+  proof(intro hyper_ascendingI hyper_set_leI)
+    fix n i
+    assume "i\<in>I"
+    show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js n) i
+           \<subseteq> sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js (Suc n)) i"
+      apply(auto simp add:sem_lifted_def sem_def map_comprehension_def lnot_def if_then_def)
+       apply (metis SemAssume SemIf2 lnot_def)
+      using \<open>i \<in> I\<close> by auto
+  next
+    fix n i
+    assume "i \<notin> I"
+    show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js n) i =
+           sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js (Suc n)) i"
+      using \<open>i \<notin> I\<close> js_org
+      by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+  qed
+  from q_ss' hasc_ss' assms(5) have qinf_un: "Q_inf (hyper_union (?Ss' Js))" 
+    unfolding relational_upwards_closed_def by simp
+  have hfa_wh: "(holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)" 
+  unfolding while_cond_def
+    by(auto simp add:sem_lifted_def holds_forall_hyper_def lnot_hyper_def lnot_def map_comprehension_def sem_def)
+  from wh_un qinf_un hfa_wh show "(conj Q_inf (holds_forall_hyper I (lnot_hyper bs))) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
+    by (simp add: conj_def)
+qed
+
+theorem while_nonfixed_alignment5:
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
+      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after n Iv I bs V)"
+      and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished I bs V)"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q n }"
+      and   "relational_upwards_closed I Q Q_inf"
+    shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+proof -
+  let ?V' = "\<lambda>J. conj (holds_for_prog_set J bs) (V J)"
+  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (?V' J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+  proof (intro allI ballI relational_hyper_hoare_tripleI)
+    fix n J S
+    assume asm1: "J \<in> Pow I - {{}}"
+    assume asm2: "Logic.conj (Iv n) (Logic.conj (holds_for_prog_set J bs) (V J)) S"
+    with asm1 asm2 assms(1) have H:"Iv (Suc n) (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)" 
+      unfolding relational_hyper_hoare_triple_def
+      by blast
+    have "(sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] S) = (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)"
+      apply(rule)
+      using asm2
+      apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def conj_def holds_for_prog_set_def holds_forall_hyper_def)
+       apply fastforce
+      by (metis SemAssume SemIf1 SemSeq snd_conv)
+    with H show "Iv (Suc n) (sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] S)" by auto
+  qed
+  moreover have "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs ?V')" using assms(2) by simp
+  moreover have "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs ?V')" using assms(3) by simp
+  ultimately show ?thesis using assms while_nonfixed_alignment6[where ?V="?V'"] by auto
+qed
 
 
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
@@ -3296,9 +3392,11 @@ theorem while_nonfixed_alignment3:
   assumes   "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj Iv (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv }"
       and   "entails Iv (can_step_any_unfinished I bs V)"
       and   "\<Turnstile> { Iv } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      and   "relational_upwards_closed I (\<lambda>n. Q) Q"
     shows   "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
   let ?Iv' = "\<lambda>n::nat. Iv"
+  let ?Q' = "\<lambda>n. Q"
   from assms(1) have "\<And>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv' n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv' (Suc n) }"
     by simp
   moreover from assms(2) can_step_any_unfinished_can_step_subset_or_all_finished 
@@ -3306,22 +3404,24 @@ proof -
         by blast
   moreover from assms(2) have "\<And>n. entails (?Iv' n) (all_unfinished_can_be_stepped_after n ?Iv' I bs V)"
         by (smt (verit, del_insts) entailsE entailsI order_refl)
-  moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+  moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { ?Q' n }"
     by auto
-  ultimately show ?thesis using while_nonfixed_alignment4[where Iv = "?Iv'" and ?I="I" and ?bs="bs" and ?V="V" and ?Cs="Cs" and ?Q="Q"]
+  moreover from assms(4) have "relational_upwards_closed I ?Q' Q" by blast
+  ultimately show ?thesis using while_nonfixed_alignment5[where Iv = "?Iv'" and ?I="I" and ?bs="bs" and ?V="V" and ?Cs="Cs" and ?Q="?Q'" and ?Q_inf = "Q"]
     by blast
 qed
 
 
-
-text\<open>This is a copy of while_lockstep rule from the fixed alignment rules section. 
+text\<open>This is a weakened copy of while_lockstep rule from the fixed alignment rules section. 
       However, now it is proven using solely while_nonfixed_alignment3.\<close>
-theorem while_lockstep_copied:
-    assumes "\<Turnstile> { conj Iv (holds_forall_hyper I bs) } [[i \<mapsto> (Cs i) | i \<in> I]] { conj Iv (low_exp_hyper I bs)}"
+theorem while_lockstep_weaker:
+  assumes "\<Turnstile> { conj Iv (holds_forall_hyper I bs) } [[i \<mapsto> (Cs i) | i \<in> I]] { conj Iv (low_exp_hyper I bs)}"
+      and   "relational_upwards_closed I (\<lambda>n. disj Iv (hyper_emp I)) (disj Iv (hyper_emp I))"
     shows   "\<Turnstile> { conj Iv (low_exp_hyper I bs)} [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
   let ?V = "\<lambda>J. if J = I then (\<lambda>S. True) else (\<lambda>S. False)"
   let ?Iv = "conj Iv (low_exp_hyper I bs)"
+  let ?Q = "disj Iv (hyper_emp I)"
   have H1: "\<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj ?Iv (conj (holds_for_prog_set J bs) (?V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv }"
   proof (intro allI ballI impI relational_hyper_hoare_tripleI)
     fix J S
@@ -3379,7 +3479,7 @@ proof -
   proof (intro relational_hyper_hoare_tripleI)
     fix S
     assume "conj Iv (low_exp_hyper I bs) S"
-    with H1 H2 H3 while_nonfixed_alignment3[of "I" "?Iv" "bs"  "?V"  "Cs" "disj Iv (hyper_emp I)"] 
+    with H1 H2 H3 assms(2) while_nonfixed_alignment3[of "I" "?Iv" "bs"  "?V"  "Cs" "?Q"] 
       show "conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
         by (simp add: relational_hyper_hoare_tripleE)
   qed
@@ -3403,6 +3503,7 @@ theorem while_nonfixed_alignment_single:
     and   "\<forall>j\<in>I. \<Turnstile> { conj Iv (conj (holds_for_prog j bs) (V j))} [[j \<mapsto> Cs j]] { Iv }"
     and   "entails Iv (can_step_any_unfinished' I bs U V)"
     and   "\<Turnstile> { Iv } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+    and   "relational_upwards_closed I (\<lambda>n. Q) Q"
     shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
 proof - 
   have "card I = 1 \<or> card I \<noteq> 1" by auto
@@ -3478,7 +3579,7 @@ proof -
           using \<open>{i} \<in> Pow I \<and> i \<in> {i}\<close> by blast 
       qed
     qed
-    ultimately show ?thesis using assms(4) while_nonfixed_alignment3[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="\<lambda>J. disj (\<lambda>S. (\<forall>i\<in>J. V i S)) U" and ?Cs="Cs" and ?Q="Q"]
+    ultimately show ?thesis using assms(4) assms(5) while_nonfixed_alignment3[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="\<lambda>J. disj (\<lambda>S. (\<forall>i\<in>J. V i S)) U" and ?Cs="Cs" and ?Q="Q"]
       by blast
   next
     assume asm0: "card I \<noteq> 1"
@@ -3542,7 +3643,7 @@ proof -
           using \<open>{i} \<in> Pow I \<and> i \<in> {i}\<close> by blast 
       qed
     qed
-    ultimately show ?thesis using assms(4) while_nonfixed_alignment3[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="\<lambda>J. if J = I then U else (if (card J = 1) then (\<lambda>S. (\<forall>i\<in>J. V i S)) else (\<lambda>S. False))" and ?Cs="Cs" and ?Q="Q"]
+    ultimately show ?thesis using assms(4) assms(5) while_nonfixed_alignment3[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="\<lambda>J. if J = I then U else (if (card J = 1) then (\<lambda>S. (\<forall>i\<in>J. V i S)) else (\<lambda>S. False))" and ?Cs="Cs" and ?Q="Q"]
       by blast
   qed
 qed
@@ -4613,9 +4714,9 @@ lemma entails_conj:
 proposition
   fixes i::nat and x::nat and c::nat
   assumes "i \<noteq> x \<and> x \<noteq> c \<and> i \<noteq> c"
-  shows "(\<Turnstile>  {(\<lambda>S::nat hyper_set. \<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x))} 
+  shows "(\<Turnstile>  {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))} 
             [[0 \<mapsto> four_to_hundred i x, 1 \<mapsto> four_to_hundred_prime i x c]::nat hyper_program] 
-             {(\<lambda>S::nat hyper_set. \<forall>(l0,\<sigma>0) \<in> (S 0). \<exists>(l1,\<sigma>1) \<in> (S 1). (\<sigma>0 x) = (\<sigma>1 x))})"
+             {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))})"
 proof -
   let ?Cs = "[0 \<mapsto> four_to_hundred i x, 1 \<mapsto> four_to_hundred_prime i x c]::nat hyper_program"
   let ?Cs1 = "[0 \<mapsto> i ::= (\<lambda>s. 100), 1 \<mapsto> i ::= (\<lambda>s. 100)]::nat hyper_program"
@@ -4698,7 +4799,7 @@ proof -
     have eq1: "[0 \<mapsto> i ::= (\<lambda>s. 100), 1 \<mapsto> i ::= (\<lambda>s. 100)] = [j \<mapsto> (\<lambda>j. i ::= (\<lambda>s. 100)) j | j \<in> {0,1}]"
       apply(rule)
       by(auto simp add:map_comprehension_def)
-    show "\<Turnstile> {(\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0.\<exists>(l1, \<sigma>1)\<in>S 1.\<sigma>0 x = \<sigma>1 x)} 
+    show "\<Turnstile> {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))} 
                   [[0 \<mapsto> i ::= (\<lambda>s. 100),1 \<mapsto> i ::= (\<lambda>s. 100)]] 
              {?Iv_p1}"
     apply(simp only:eq1)
@@ -4712,7 +4813,7 @@ proof -
     (*Step 2*)
     show "\<Turnstile> {?Iv_p1} 
                             [(hyper_seq ?Cs2 ?Cs3)::nat hyper_program] 
-                {\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x}"
+                {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))}"
     proof (rule lockstep_seq[where ?R = "?Iv_p1"])
       have eq2: "[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)] = [j \<mapsto> (\<lambda>j. x ::= (\<lambda>s. 1)) j | j \<in> {0,1}]"
         apply(rule)
@@ -4740,7 +4841,7 @@ proof -
       (*Step 3*)
       show "\<Turnstile> {?Iv_p1} 
                                          [?Cs3::nat hyper_program] 
-                  {\<lambda>S. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x}"
+                  {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))}"
         apply(rule progress_any[where ?i="1" and ?R = "?Iv 0"])
     
         apply(simp del: add_Suc_right One_nat_def)
@@ -4775,7 +4876,7 @@ proof -
           apply(rule)
           by(auto simp add:map_comprehension_def)
         (*Step 4*)
-        let ?Q = "\<lambda>S::nat hyper_set. \<forall>(l0, \<sigma>0)\<in>S 0. \<exists>(l1, \<sigma>1)\<in>S 1. \<sigma>0 x = \<sigma>1 x"
+        let ?Q = "\<lambda>S::nat hyper_set. \<forall>\<sigma>0\<in>S 0. \<exists>\<sigma>1\<in>S 1. (snd \<sigma>0 x) = (snd \<sigma>1 x)"
         let ?V = "\<lambda>J::nat set. if J = {0,1} then (\<lambda>S::nat hyper_set. (\<forall>(\<sigma>1)\<in>(S 1). prime ((snd \<sigma>1) c))) else (
                       if J = {1} then (\<lambda>S::nat hyper_set. (\<forall>\<sigma>1\<in>(S 1). \<not>prime ((snd \<sigma>1) c))) else (\<lambda>S::nat hyper_set. False))"
         show "\<Turnstile> {?Iv 0} [?Cs3(1 \<mapsto> ?Loop2)] {?Q}"
@@ -4783,7 +4884,7 @@ proof -
           apply(simp only:eq5)
           apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper ?conds))"])
            apply (simp add: entail_conj_weaken)
-          apply(rule while_nonfixed_alignment4[where V = "?V" and Q = "?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
+          apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "(\<lambda>n. ?Q)" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
         proof -
           (*Step 4.1*)
           show "\<forall>n. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
@@ -5032,6 +5133,11 @@ proof -
             apply(intro entailsI)
             unfolding lnot_def
             by fastforce
+        next 
+          (*Step 4.5*)
+          show "relational_upwards_closed {0, 1} (\<lambda>n. ?Q) ?Q" 
+            apply(auto simp add:relational_upwards_closed_def hyper_union_def hyper_ascending_def hyper_set_le_def)
+            by (metis snd_eqD)
         qed
       qed
     qed
