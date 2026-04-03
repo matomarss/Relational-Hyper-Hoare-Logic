@@ -3298,15 +3298,36 @@ abbreviation can_step_subset_or_all_finished2 where
 
 fun sem_lifted_stacked where
 "sem_lifted_stacked bs Cs S Js 0 = S" |
-"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> Js (Suc n)] (sem_lifted_stacked bs Cs S Js n)"
+"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> Js n (sem_lifted_stacked bs Cs S Js n)] (sem_lifted_stacked bs Cs S Js n)"
+
+lemma can_step_subset_or_all_finished2_exists_out:
+  assumes "I \<noteq> {}"
+      and "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs V)"
+    shows "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)"
+  using assms unfolding entails_def disj_I_def
+  by (smt (verit, ccfv_threshold) Diff_empty Diff_insert0 Pow_not_empty Pow_singleton_iff disj_def empty_Collect_eq insert_Diff mem_Collect_eq set_diff_eq)
+
+
+thm "relational_upwards_closed_def"
+
+definition closed_under_union where
+"closed_under_union I Q Q_cap = (\<forall>Ss. hyper_ascending I Ss \<longrightarrow> ((\<forall>n. Q n (Ss n) \<or> (\<exists>m<n. (Ss n) = (Ss m) \<and> (Q m) (Ss m))) \<longrightarrow> Q_cap (hyper_union Ss)))"
+
+
+lemma least_one_exists:
+  assumes "\<exists>n::nat. P n"
+  shows "\<exists>n::nat. P n \<and> (\<forall>n'::nat < n. \<not> (P n'))"
+  using assms 
+  using least_or_none by auto
 
 
 theorem while_nonfixed_alignment6:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs V)"
-      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q n }"
-      and   "relational_upwards_closed I Q Q_inf"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
+      and   "I \<noteq> {}"
     shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
 proof(intro relational_hyper_hoare_tripleI)
   fix S
@@ -3314,19 +3335,187 @@ proof(intro relational_hyper_hoare_tripleI)
   let ?Ss = "sem_lifted_stacked bs Cs S"
   let ?Ss' = "\<lambda>Js. \<lambda>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n)"
 
-  have "\<exists>Js::nat \<Rightarrow> nat set. (\<forall>n::nat. (Js n) \<in> (Pow I - {{}})) \<and> 
-        (\<forall>n::nat. (Iv n) (?Ss Js n) \<and> ((V (Js (Suc n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n))) \<and>
-        sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' Js)" 
+  have "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)"
     sorry
-  from this obtain Js where js_org:"(\<forall>n::nat. (Js n) \<in> (Pow I - {{}}))" and 
-        ss_prop:"(\<forall>n::nat. (Iv n) (?Ss Js n) \<and> ((V (Js (Suc n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n)))" and
-        wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' Js)" by blast
-  have q_ss': "\<forall>n::nat. (Q n) (?Ss' Js n)" 
-  proof
-    fix n
-    from ss_prop have "(Iv n) (?Ss Js n)" by auto
-    with assms(4) show "(Q n) (?Ss' Js n)" unfolding relational_hyper_hoare_triple_def by auto
+  have "\<forall>n. \<exists>J\<in>(Pow I - {{}}). \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss (\<lambda>n. \<lambda>S. J) n) i)) \<or> (\<exists>n' \<ge> n. (i \<in> (\<lambda>n. \<lambda>S. J) n' (?Ss (\<lambda>n. \<lambda>S. J) n')))" sorry
+  from assms(3) assms(6) can_step_subset_or_all_finished2_exists_out 
+    have "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)" by metis
+  from this obtain Js where obt:"\<forall>n. (\<forall>S. (Js n S) \<in> (Pow I - {{}}) \<and> (((Iv n) S) \<longrightarrow> (((disj (V (Js n S)) (holds_forall_hyper I (lnot_hyper bs))) S))))"
+    by metis
+
+  have js_org:"(\<forall>n::nat. \<forall>S. (Js n S) \<in> (Pow I - {{}}))"
+  proof -
+    show "\<forall>n S. Js n S \<in> Pow I - {{}}" using obt by auto
   qed
+
+  have ss_js_prop:"(\<forall>n::nat. ((Iv n) (?Ss Js n) \<and> (V (Js n (?Ss Js n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n))
+                    \<and> Q (?Ss' Js n))"  
+  proof 
+    fix n
+    show "((Iv n) (?Ss Js n) \<and> (V (Js n (?Ss Js n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n))
+                    \<and> Q (?Ss' Js n)"
+    proof (induction n)
+      case 0
+      then have "(Iv 0 (?Ss Js 0) \<and> V (Js 0 (?Ss Js 0)) (?Ss Js 0) \<or>
+                  holds_forall_hyper I (lnot_hyper bs) (?Ss Js 0))" using \<open>Iv 0 S\<close>
+        by (metis disj_def obt sem_lifted_stacked.simps(1))
+      moreover from assms(4) \<open>Iv 0 S\<close> have "Q (?Ss' Js 0)"
+        using  relational_hyper_hoare_tripleE by fastforce
+      ultimately show ?case by auto
+    next
+      case (Suc n)
+      from this have "((Iv n) (?Ss Js n) \<and> (V (Js n (?Ss Js n))) (?Ss Js n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss Js n))" by auto
+      from this show ?case
+      proof
+        assume asm1: "((Iv n) (?Ss Js n) \<and> (V (Js n (?Ss Js n))) (?Ss Js n))"
+        have "\<Turnstile> {conj (Iv n) (V (Js n (sem_lifted_stacked bs Cs S Js n)))} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> (Js n (?Ss Js n))]] {Iv (Suc n)}"
+          using assms(1) obt by auto
+        with asm1 have H:"Iv (Suc n) (?Ss Js (Suc n))" unfolding relational_hyper_hoare_triple_def conj_def 
+          by simp
+        with assms(4) have "Q (?Ss' Js (Suc n))" 
+          using relational_hyper_hoare_tripleE by blast
+        with H obt show ?case
+          by (simp add: disj_def)
+      next
+        assume asm2:"holds_forall_hyper I (lnot_hyper bs) (?Ss Js n)"
+        from obt have H:"\<forall>n S. Js n S \<in> Pow I - {{}}" by auto
+        have "(?Ss Js n) = (?Ss Js (Suc n))"
+          apply(rule)
+          using asm2 H
+          apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def holds_forall_hyper_def lnot_hyper_def)
+          apply (metis SemAssume SemIf2 lnot_def snd_conv subsetD)
+          by (metis in_mono snd_eqD)
+        then show ?case using Suc asm2 by auto
+      qed
+    qed
+  qed
+
+  have un_js_i:"hyper_union (?Ss' Js) = hyper_union (?Ss' (\<lambda>n. \<lambda>S. I))" unfolding hyper_union_def
+    apply(rule)
+  proof(rule)
+    fix i
+    have "\<And>n. \<exists>n'. (?Ss Js n) i = (?Ss (\<lambda>n. \<lambda>S. I) n') i"
+    proof -
+      fix n
+      show "\<exists>n'. (?Ss Js n) i = (?Ss (\<lambda>n. \<lambda>S. I) n') i"
+      proof(induction n)
+        case 0
+        have "sem_lifted_stacked bs Cs S Js 0 i = sem_lifted_stacked bs Cs S (\<lambda>n S. I) 0 i" by simp
+        then show ?case
+          by blast
+      next
+        case (Suc n)
+        from this obtain n' where H:"(?Ss Js n) i  = (?Ss (\<lambda>n. \<lambda>S. I) n') i" by blast
+        have "i \<notin> Js n (?Ss Js n) \<or> i \<in> Js n (?Ss Js n)" by auto
+        then show ?case 
+        proof
+          assume asm:"i \<notin> Js n (?Ss Js n)"
+          have "(?Ss Js (Suc n)) i = (?Ss (\<lambda>n. \<lambda>S. I) n') i" 
+            apply(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+            using asm H by(auto)
+          thus ?case 
+            by auto
+        next
+          assume asm:"i \<in> Js n (?Ss Js n)"
+          have "(?Ss Js (Suc n)) i = (?Ss (\<lambda>n. \<lambda>S. I) (Suc n')) i" 
+            apply(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+            using asm H apply auto[1]
+            using H apply auto[1]
+            apply (metis Diff_iff Pow_iff insert_Diff insert_subset obt)
+            apply (metis Diff_iff Diff_insert_absorb Pow_iff obt subset_Diff_insert)
+            by (auto simp add: asm)
+          thus ?case 
+            by blast
+        qed
+      qed
+    qed
+    hence "\<And>n. \<exists>n'. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n) i = sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss (\<lambda>n. \<lambda>S. I) n') i"
+      by (metis (lifting) sem_lifted_def)
+    thus "(\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n) i) \<subseteq> (\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss (\<lambda>n. \<lambda>S. I) n) i)"
+      by blast
+  next
+    fix i
+    have "\<And>n. \<exists>n'. (?Ss (\<lambda>n. \<lambda>S. I) n) i = (?Ss Js n') i"
+    proof -
+      fix n
+      show "\<exists>n'. (?Ss (\<lambda>n. \<lambda>S. I) n) i = (?Ss Js n') i"
+      proof(induction n)
+        case 0
+        have "sem_lifted_stacked bs Cs S (\<lambda>n S. I) 0 i = sem_lifted_stacked bs Cs S Js 0 i" by simp
+        then show ?case
+          by blast
+      next
+        case (Suc n)
+        from this obtain n' where H:"(?Ss (\<lambda>n. \<lambda>S. I) n) i = (?Ss Js n') i" by blast
+        have "i\<notin>I \<or> i \<in> I" by auto
+        then show ?case 
+        proof 
+          assume asm:"i \<notin> I"
+          have "(?Ss (\<lambda>n. \<lambda>S. I) (Suc n)) i = (?Ss Js n') i" 
+            using asm H
+            by(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+          then show ?case by blast
+        next 
+          assume asm: "i \<in> I"
+          have "\<forall>n. \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss Js n) i)) \<or> (\<exists>n' \<ge> n. (i \<in> Js n' (?Ss Js n')))" sorry
+          hence "(holds_forall (lnot (bs i)) ((?Ss Js n') i) \<or> (\<exists>n'' \<ge> n'. (i \<in> Js n'' (?Ss Js n''))))"
+            by (simp add: asm)
+          then show ?case 
+          proof 
+            assume "(holds_forall (lnot (bs i)) ((?Ss Js n') i))"
+            with H have "(holds_forall (lnot (bs i)) ((?Ss (\<lambda>n S. I) n) i))"
+              by simp
+            from this have "sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc n) i = sem_lifted_stacked bs Cs S (\<lambda>n S. I) n i" 
+              apply(auto simp add:holds_forall_def lnot_def sem_lifted_def map_comprehension_def sem_def if_then_def)
+              by (metis SemAssume SemIf2 lnot_def snd_conv)
+            with H show ?case
+              by auto
+          next
+            assume "(\<exists>n''::nat \<ge> n'. (i \<in> Js n'' (?Ss Js n'')))"
+            hence "\<exists>n''::nat\<ge>n'. i \<in> Js n'' (?Ss Js n'') \<and> (\<forall>n'''::nat< n''. n'''\<ge> n' \<longrightarrow> i \<notin> Js n''' (?Ss Js n'''))"
+              using least_one_exists[where ?P = "\<lambda>n''. n''\<ge> n' \<and> i \<in> Js n'' (?Ss Js n'')"] by auto
+            from this obtain n'' where ns_ineq:"n'' \<ge> n'" and i_in: "i \<in> Js n'' (?Ss Js n'')" 
+                                 and no_less:"(\<forall>n'''::nat< n''. n'''\<ge> n' \<longrightarrow> i \<notin> Js n''' (?Ss Js n'''))"
+              using asm by auto
+            have H2:"(\<forall>n'''\<le> n''. n'''> n' \<longrightarrow> (?Ss Js n''') i = (?Ss Js n') i)" 
+            proof (intro allI impI)
+              fix n'''
+              assume asm1:"n''' \<le> n''"
+              assume asm2:"n' < n'''"
+              from asm1 asm2 show "(?Ss Js n''') i = (?Ss Js n') i"
+              proof (induction n''')
+                case 0
+                then show ?case by auto
+              next
+                case (Suc n''')
+                from this no_less have H1:"i \<notin> Js n''' (?Ss Js n''')" 
+                  by simp
+                from Suc have H2:"sem_lifted_stacked bs Cs S Js n''' i = sem_lifted_stacked bs Cs S Js n' i"
+                  using not_less_less_Suc_eq by auto
+                show ?case using H1
+                  apply(auto simp add:sem_lifted_def map_comprehension_def)
+                  using H2 by auto
+              qed
+            qed
+            have "(?Ss  (\<lambda>n S. I) (Suc n)) i = (?Ss Js (Suc n'')) i" 
+              using i_in asm H H2
+              apply(auto simp add:sem_lifted_def map_comprehension_def)
+              using ns_ineq apply auto[1]
+              using ns_ineq by auto
+            then show ?case
+              by blast
+          qed
+        qed
+      qed
+    qed
+    hence "\<And>n. \<exists>n'. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss (\<lambda>n. \<lambda>S. I) n) i = sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n') i" 
+      by (metis (lifting) sem_lifted_def)
+    thus "(\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss (\<lambda>n. \<lambda>S. I) n) i) \<subseteq> (\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n) i)" 
+      by blast
+  qed
+
+  have wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' (\<lambda>n. \<lambda>S. I))" sorry
+
   have hasc_ss':"hyper_ascending I (?Ss' Js)" 
   proof(intro hyper_ascendingI hyper_set_leI)
     fix n i
@@ -3342,14 +3531,18 @@ proof(intro relational_hyper_hoare_tripleI)
     show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js n) i =
            sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (sem_lifted_stacked bs Cs S Js (Suc n)) i"
       using \<open>i \<notin> I\<close> js_org
-      by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+      apply(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+      by auto
   qed
-  from q_ss' hasc_ss' assms(5) have qinf_un: "Q_inf (hyper_union (?Ss' Js))" 
+
+  from ss_js_prop hasc_ss' assms(5) have qinf_un: "Q_inf (hyper_union (?Ss' Js))" 
     unfolding relational_upwards_closed_def by simp
+
   have hfa_wh: "(holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)" 
-  unfolding while_cond_def
-    by(auto simp add:sem_lifted_def holds_forall_hyper_def lnot_hyper_def lnot_def map_comprehension_def sem_def)
-  from wh_un qinf_un hfa_wh show "(conj Q_inf (holds_forall_hyper I (lnot_hyper bs))) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
+    unfolding while_cond_def
+  by(auto simp add:sem_lifted_def holds_forall_hyper_def lnot_hyper_def lnot_def map_comprehension_def sem_def)
+
+  from wh_un un_js_i qinf_un hfa_wh show "(conj Q_inf (holds_forall_hyper I (lnot_hyper bs))) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
     by (simp add: conj_def)
 qed
 
@@ -3357,8 +3550,9 @@ theorem while_nonfixed_alignment5:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished I bs V)"
-      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q n }"
-      and   "relational_upwards_closed I Q Q_inf"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
+      and   "I \<noteq> {}"
     shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
   let ?V' = "\<lambda>J. conj (holds_for_prog_set J bs) (V J)"
@@ -3384,6 +3578,13 @@ proof -
 qed
 
 
+lemma no_program_sem_lifted: 
+  assumes "I = {}"
+  shows "sem_lifted [i \<mapsto> Cs i | i \<in> I] S = S"
+  apply(rule)
+  using assms
+  by(auto simp add:sem_lifted_def map_comprehension_def )
+
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
       The rule assumes:
         a.	one lockstep case for every possible subset of programs
@@ -3395,20 +3596,41 @@ theorem while_nonfixed_alignment3:
       and   "relational_upwards_closed I (\<lambda>n. Q) Q"
     shows   "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
-  let ?Iv' = "\<lambda>n::nat. Iv"
-  let ?Q' = "\<lambda>n. Q"
-  from assms(1) have "\<And>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv' n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv' (Suc n) }"
-    by simp
-  moreover from assms(2) can_step_any_unfinished_can_step_subset_or_all_finished 
-      have  "\<And>n. entails (?Iv' n) (can_step_subset_or_all_finished I bs V)"
-        by blast
-  moreover from assms(2) have "\<And>n. entails (?Iv' n) (all_unfinished_can_be_stepped_after n ?Iv' I bs V)"
-        by (smt (verit, del_insts) entailsE entailsI order_refl)
-  moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { ?Q' n }"
+  have "I = {} \<or> I \<noteq> {}"
     by auto
-  moreover from assms(4) have "relational_upwards_closed I ?Q' Q" by blast
-  ultimately show ?thesis using while_nonfixed_alignment5[where Iv = "?Iv'" and ?I="I" and ?bs="bs" and ?V="V" and ?Cs="Cs" and ?Q="?Q'" and ?Q_inf = "Q"]
-    by blast
+  thus ?thesis
+  proof 
+    assume "I = {}"
+    show ?thesis
+    proof (intro relational_hyper_hoare_tripleI)
+      fix S
+      assume "Iv S"
+      have "(holds_forall_hyper I (lnot_hyper bs)) S"
+        by(auto simp add:holds_forall_hyper_def lnot_hyper_def \<open>I = {}\<close>)
+      from no_program_sem_lifted have "sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S = S"
+        using \<open>I = {}\<close> by auto
+      with assms(3) have "Q S"
+        by (metis \<open>Iv S\<close> relational_hyper_hoare_triple_def)
+      from \<open>(holds_forall_hyper I (lnot_hyper bs)) S\<close> \<open>Q S\<close> have "(conj (holds_forall_hyper I (lnot_hyper bs)) Q) S" unfolding conj_def by auto
+      with no_program_sem_lifted \<open>I = {}\<close> show "conj Q (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted (map_comprehension (\<lambda>i. while_cond (bs i) (Cs i)) (\<lambda>i. i \<in> I)) S)" 
+        by (metis (full_types) conj_def)
+    qed
+  next
+    assume asm: "I \<noteq> {}"
+    let ?Iv' = "\<lambda>n::nat. Iv"
+    from assms(1) have "\<And>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv' n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto>  Cs i | i \<in> J]] { ?Iv' (Suc n) }"
+      by simp
+    moreover from assms(2) can_step_any_unfinished_can_step_subset_or_all_finished 
+        have  "\<And>n. entails (?Iv' n) (can_step_subset_or_all_finished I bs V)"
+          by blast
+    moreover from assms(2) have "\<And>n. entails (?Iv' n) (all_unfinished_can_be_stepped_after n ?Iv' I bs V)"
+          by (smt (verit, del_insts) entailsE entailsI order_refl)
+    moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      by auto
+    moreover from assms(4) have "relational_upwards_closed I (\<lambda>n. Q) Q" by blast
+    ultimately show ?thesis using while_nonfixed_alignment5[where Iv = "?Iv'" and ?I="I" and ?bs="bs" and ?V="V" and ?Cs="Cs" and ?Q="Q" and ?Q_inf = "Q"] asm
+      by blast
+  qed
 qed
 
 
@@ -4884,7 +5106,7 @@ proof -
           apply(simp only:eq5)
           apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper ?conds))"])
            apply (simp add: entail_conj_weaken)
-          apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "(\<lambda>n. ?Q)" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
+          apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "?Q" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
         proof -
           (*Step 4.1*)
           show "\<forall>n. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
@@ -5138,6 +5360,8 @@ proof -
           show "relational_upwards_closed {0, 1} (\<lambda>n. ?Q) ?Q" 
             apply(auto simp add:relational_upwards_closed_def hyper_union_def hyper_ascending_def hyper_set_le_def)
             by (metis snd_eqD)
+        next
+          show "{0, 1} \<noteq> {}" by auto
         qed
       qed
     qed
