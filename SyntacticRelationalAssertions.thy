@@ -3335,9 +3335,9 @@ proof(intro relational_hyper_hoare_tripleI)
   let ?Ss = "sem_lifted_stacked bs Cs S"
   let ?Ss' = "\<lambda>Js. \<lambda>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss Js n)"
 
-  have "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)"
+  (*have "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)"
     sorry
-  have "\<forall>n. \<exists>J\<in>(Pow I - {{}}). \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss (\<lambda>n. \<lambda>S. J) n) i)) \<or> (\<exists>n' \<ge> n. (i \<in> (\<lambda>n. \<lambda>S. J) n' (?Ss (\<lambda>n. \<lambda>S. J) n')))" sorry
+  have "\<forall>n. \<exists>J\<in>(Pow I - {{}}). \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss (\<lambda>n. \<lambda>S. J) n) i)) \<or> (\<exists>n' \<ge> n. (i \<in> (\<lambda>n. \<lambda>S. J) n' (?Ss (\<lambda>n. \<lambda>S. J) n')))" sorry*)
   from assms(3) assms(6) can_step_subset_or_all_finished2_exists_out 
     have "\<forall>n. \<forall>S. \<exists>J\<in>(Pow I - {{}}). (Iv n) S \<longrightarrow> ((disj (V J) (holds_forall_hyper I (lnot_hyper bs))) S)" by metis
   from this obtain Js where obt:"\<forall>n. (\<forall>S. (Js n S) \<in> (Pow I - {{}}) \<and> (((Iv n) S) \<longrightarrow> (((disj (V (Js n S)) (holds_forall_hyper I (lnot_hyper bs))) S))))"
@@ -3514,8 +3514,117 @@ proof(intro relational_hyper_hoare_tripleI)
       by blast
   qed
 
-  have wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' (\<lambda>n. \<lambda>S. I))" sorry
+  have wh_un_ss: "sem_lifted [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S = hyper_union (?Ss (\<lambda>n. \<lambda>S. I))"
+    apply(rule)
+    apply(auto simp add:sem_lifted_def map_comprehension_def hyper_union_def)
+       prefer 3
+       apply (metis sem_lifted_stacked.simps(1))
+      prefer 3
+    subgoal premises prems for x a b xa 
+      using prems
+    proof (induction xa)
+      case 0
+      then show ?thesis
+        using prems(2) by auto
+    next
+      case (Suc nat)
+      have "sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc nat) x = sem_lifted_stacked bs Cs S (\<lambda>n S. I) (nat) x"
+        using Suc
+        by(auto simp add:sem_lifted_def map_comprehension_def)
+      then show ?thesis
+        using Suc.IH Suc.prems(2) prems(1) by auto
+    qed
+     apply(auto simp add:sem_def while_cond_def)
+  proof -
+    fix i l \<sigma>' \<sigma>
+    assume asm1:"i\<in>I"
+    assume asm2:"(l,\<sigma>) \<in> S i"
+    assume asm3:"\<langle>While (Assume (bs i) ;; Cs i), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+    from asm3 asm1 asm2 show "\<exists>n. (l, \<sigma>') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) n i"
+    proof (induction "While (Assume (bs i) ;; Cs i)" "\<sigma>" "\<sigma>'" arbitrary: S rule:single_sem.induct)
+      case (SemWhileIter \<sigma> \<sigma>' \<sigma>'')
+      have H1:"(l, \<sigma>') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc 0) i" 
+        using \<open>i \<in> I\<close> \<open>\<langle>Assume (bs i) ;; Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'\<close>
+        apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def)
+        by (meson SemIf1 SemWhileIter.hyps(1) SemWhileIter.prems(2))
+      have H2:"\<And>n n' s. s \<in> sem_lifted_stacked bs Cs (sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc 0)) (\<lambda>n S. I) n i 
+              \<longrightarrow> s \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc n) i" 
+        using \<open>i \<in> I\<close>
+        apply(auto simp add:sem_lifted_def map_comprehension_def)
+      proof -
+        fix n a b
+        assume asm1: "i \<in> I"
+        assume asm2: "(a, b) \<in> sem_lifted_stacked bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then (bs i) (Cs i)) else None) S) (\<lambda>n S. I) n i"
+        from asm1 asm2 show "(a, b) \<in> sem (if_then (bs i) (Cs i)) (sem_lifted_stacked bs Cs S (\<lambda>n S. I) n i)"
+        proof (induction n arbitrary: b )
+          case 0
+          then show ?case 
+            by(auto simp add:sem_lifted_def)
+        next
+          case (Suc n)
+          hence "(a, b) \<in> sem_lifted_stacked bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then (bs i) (Cs i)) else None) S) (\<lambda>n S. I) (Suc n) i" by auto
+          from this show ?case 
+            using Suc
+            apply(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+            by blast
+        qed
+      qed        
+      from H1 H2 SemWhileIter have "\<exists>n. (l, \<sigma>'') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc n) i"
+        by blast
+      then show ?case
+        by blast
+    next
+      case (SemWhileExit \<sigma>)
+      then show ?case 
+        by (metis sem_lifted_stacked.simps(1))
+    qed
+  next
+    fix i l \<sigma>' n
+    assume asm1:"i\<in>I"
+    assume asm2:"(l, \<sigma>') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) n i"
+    from asm1 asm2 show "\<exists>\<sigma>. (l, \<sigma>) \<in> S i \<and> \<langle>While (Assume (bs i) ;; Cs i), \<sigma>\<rangle> \<rightarrow> \<sigma>'" 
+    proof (induction n arbitrary: \<sigma>')
+      case 0
+      then show ?case
+        using single_sem.SemWhileExit by auto
+    next
+      case (Suc n)
+      have "\<And>C s s' s''. \<langle>While C, s\<rangle> \<rightarrow> s' \<and> \<langle>C,s'\<rangle> \<rightarrow> s'' \<Longrightarrow> \<langle>While C, s\<rangle> \<rightarrow> s''"
+        using while_iter_reversed by auto
+      obtain \<sigma>'' where "(l, \<sigma>'') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) n i" and ifte:"\<langle>if_then (bs i) (Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
+        using \<open>(l, \<sigma>') \<in> sem_lifted_stacked bs Cs S (\<lambda>n S. I) (Suc n) i\<close> \<open>i\<in>I\<close>
+        by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+      with Suc obtain \<sigma> where \<sigma>_obt: "(l, \<sigma>) \<in> S i \<and> \<langle>While (Assume (bs i) ;; Cs i), \<sigma>\<rangle> \<rightarrow> \<sigma>''"
+        by blast
+     have H:"\<not> bs i \<sigma>'' \<Longrightarrow> \<sigma>'' = \<sigma>'"
+       using ifte
+       by(auto simp add:if_then_def)
+     from ifte have "\<langle>(Assume (bs i) ;; Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>' \<or> \<not> bs i \<sigma>''"
+       by(auto simp add:if_then_def lnot_def)
+     then show ?case 
+     proof
+       assume "\<langle>(Assume (bs i) ;; Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
+       then show ?case using while_iter_reversed \<sigma>_obt
+         by metis
+     next
+       assume "\<not> bs i \<sigma>''"
+       hence "\<sigma>'' = \<sigma>'" using H by auto
+       then show ?case using \<sigma>_obt by auto
+     qed
+    qed
+  qed
 
+  have wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?Ss' (\<lambda>n. \<lambda>S. I))" 
+  proof(rule)
+    fix i
+    from wh_un_ss have H: "sem_lifted [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S i = hyper_union (?Ss (\<lambda>n. \<lambda>S. I)) i" by auto
+    show "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S i = hyper_union (?Ss' (\<lambda>n. \<lambda>S. I)) i"
+    using H unfolding hyper_union_def while_cond_def 
+    apply(auto simp add:sem_lifted_def map_comprehension_def sem_def lnot_def set_eq_iff)
+     apply (metis SemAssume lnot_def)
+    by (metis SemAssume SemSeq lnot_def)
+  qed
+    
   have hasc_ss':"hyper_ascending I (?Ss' Js)" 
   proof(intro hyper_ascendingI hyper_set_leI)
     fix n i
