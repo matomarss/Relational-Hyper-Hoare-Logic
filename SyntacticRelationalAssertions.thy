@@ -3357,8 +3357,11 @@ definition priority_JS_based_execution where
 abbreviation current_q where
   "current_q E \<equiv> snd (snd (E))"
 
+abbreviation current_l where
+  "current_l E \<equiv> fst (snd (E))"
+
 abbreviation valid_qs where
-  "valid_qs I \<equiv> (if finite I then {0..<card I} else UNIV)"
+  "valid_qs I \<equiv> (if finite I then {0..<card I} else UNIV::nat set)"
 
 
 lemma priority_picker_inJS:
@@ -3513,44 +3516,6 @@ fun sem_lifted_after_n_steps where
 
 
 
-
-lemma 
-  assumes "\<forall>i\<in>valid_qs I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i)"
-  shows "\<forall>i \<in> I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
-  sorry
-
-lemma all_q_revisited:
-  assumes "(\<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or>  
-  (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
-  shows "\<forall>i \<in> I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
-  sorry
-(*proof (intro allI ballI)
-  fix i n
-  assume asm:"i\<in> (if finite I then {0..<card I} else UNIV)"
-  show "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
-  proof (induction n)
-    case 0
-    from asm show ?case 
-    proof(induction i)
-      case 0
-      have "current_q (priority_JS_based_execution_aux bs Cs S JS I 0) = 0"
-        by simp
-      then show ?case by blast
-    next
-      case (Suc i)
-      hence "i \<in> valid_qs I"
-        by (meson Suc_lessD UNIV_I atLeastLessThan_iff bot_nat_0.extremum)
-      with Suc obtain n' where "current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
-      then show ?case sorry 
-    qed
-  next
-    case (Suc n)
-    then show ?case sorry
-  qed
-qed*)
-
-
-
 lemma state_preservation:
   assumes "\<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
         priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
@@ -3599,9 +3564,747 @@ proof(intro allI ballI impI, elim conjE)
   qed
 qed
 
+
+lemma qth_program_surj:
+  "\<forall>i::nat\<in>I. \<exists>k\<in>valid_qs I. qth_program I k = i"
+proof
+  fix i::nat
+  assume iI: "i \<in> I"
+  let ?k = "card {j \<in> I. j < i}"
+
+  have k_valid: "?k \<in> valid_qs I"
+  proof (simp, intro impI)
+    assume fin: "finite I"
+    have "{j \<in> I. j < i} \<subset> I"
+      using iI by auto
+    moreover have "finite {j \<in> I. j < i}"
+      using fin by auto
+    ultimately have "card {j \<in> I. j < i} < card I"
+      using fin psubset_card_mono by blast
+    thus "?k < card I"
+      by simp
+  qed
+
+  have qth_eq: "qth_program I ?k = i"
+  proof (unfold qth_program_def, rule the_equality)
+    show "i \<in> I \<and> card {j \<in> I. j < i} = ?k"
+      using iI by simp
+  next
+    fix x
+    assume hx: "x \<in> I \<and> card {j \<in> I. j < x} = ?k"
+    then have xI: "x \<in> I"
+      by simp
+    have card_eq: "card {j \<in> I. j < x} = card {j \<in> I. j < i}"
+      using hx by simp
+    show "x = i"
+    proof (cases x i rule: linorder_cases)
+      case less
+      then have "{j \<in> I. j < x} \<subset> {j \<in> I. j < i}"
+        using xI iI by auto
+      moreover have "finite {j \<in> I. j < i}"
+        by simp
+      ultimately have "card {j \<in> I. j < x} < card {j \<in> I. j < i}"
+        using psubset_card_mono by blast
+      with card_eq show ?thesis
+        by simp
+    next
+      case equal
+      then show ?thesis
+        by simp
+    next
+      case greater
+      then have "{j \<in> I. j < i} \<subset> {j \<in> I. j < x}"
+        using xI iI by auto
+      moreover have "finite {j \<in> I. j < x}"
+        by simp
+      ultimately have "card {j \<in> I. j < i} < card {j \<in> I. j < x}"
+        using psubset_card_mono by blast
+      with card_eq show ?thesis
+        by simp
+    qed
+  qed
+
+  show "\<exists>k\<in>valid_qs I. qth_program I k = i"
+    using k_valid qth_eq by blast
+qed
+
+
+
+lemma qs_to_progs:
+  assumes "\<forall>i\<in>valid_qs I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i)"
+  shows "\<forall>i \<in> I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
+proof (intro ballI allI)
+  fix i n
+  assume iI: "i \<in> I"
+  from qth_program_surj iI obtain k where
+    kvalid: "k \<in> valid_qs I"
+    and ki: "qth_program I k = i"
+    by blast
+  from assms kvalid have
+    "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or>
+     (\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = k)"
+    by blast
+  then show
+    "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or>
+     (\<exists>n'\<ge>n. qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n')) = i)"
+  proof
+    assume
+      "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n)"
+    then show ?thesis
+      by blast
+  next
+    assume "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = k"
+    then obtain n' where
+      nn': "n' \<ge> n"
+      and qeq: "current_q (priority_JS_based_execution_aux bs Cs S JS I n') = k"
+      by blast
+    have "qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n')) = i"
+      using qeq ki by simp
+    then show ?thesis
+      using nn' by blast
+  qed
+qed
+
+
+
+
+
+
+
+
+
+lemma q_belonging_lemma:
+  assumes "I \<noteq> {}"
+  shows "(current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> valid_qs I"
+  sorry
+(*using assms
+proof (induction n)
+  case 0
+  then show ?case
+    by (auto simp: card_gt_0_iff)
+next
+  case (Suc n)
+  obtain Sn l q where H:
+    "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+
+  from Suc.IH assms have qIH:
+    "current_q (priority_JS_based_execution_aux bs Cs S JS I n) \<in> valid_qs I"
+    by simp
+  from qIH H have q_valid:
+    "q \<in> valid_qs I"
+    by (simp)
+
+  have q_lt_card: "finite I \<Longrightarrow> q < card I"
+    using q_valid by (simp)
+
+  have l_pos: "1 \<le> l"
+  proof -
+    have "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+      using H .
+    then show ?thesis
+    proof (induction n arbitrary: Sn l q)
+      case 0
+      then show ?case by simp
+    next
+      case (Suc m)
+      then obtain Sm lm qm where
+        Hm: "priority_JS_based_execution_aux bs Cs S JS I m = (Sm,lm,qm)"
+        by (cases "priority_JS_based_execution_aux bs Cs S JS I m")
+      from Suc.IH[OF Hm] Suc show ?case 
+        apply (auto simp: Hm Let_def next_len_def split: if_splits)
+        using q_lt_card apply linarith
+        using q_lt_card by linarith
+    qed
+  qed
+
+  show ?case
+  proof (cases "qth_program I q \<in> priority_picker JS (qth_program I q) n Sn \<or>
+                holds_forall (lnot (bs (qth_program I q))) (Sn (qth_program I q))")
+    case False
+    with H q_valid show ?thesis
+      by (auto simp:  Let_def)
+  next
+    case True
+    then show ?thesis
+    proof (cases "Suc q < l")
+      case True
+      with H q_valid q_lt_card show ?thesis
+        apply (auto simp:  Let_def)
+        sledgehammer
+    next
+      case False
+      with H q_valid q_lt_card assms show ?thesis
+        by (auto simp:  Let_def next_len_def card_gt_0_iff split: if_splits)
+    qed
+  qed
+qed*)
+
+lemma l_belonging_lemma:
+  assumes "I \<noteq> {}"
+  shows "((current_l (priority_JS_based_execution_aux bs Cs S JS I n))-1) \<in> valid_qs I"
+  sorry
+
+lemma q_l_inequality_lemma:
+  shows "current_q (priority_JS_based_execution_aux bs Cs S JS I n) < current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+  sorry
+
+
+
+
+
+
+lemma lm2:
+  assumes "(\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J)))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"  
+   and "I \<noteq> {}"
+ shows "\<forall>i\<in>valid_qs I. current_q (priority_JS_based_execution_aux bs Cs S JS I n) = i \<longrightarrow> (Suc i) < current_l (priority_JS_based_execution_aux bs Cs S JS I n) 
+  \<longrightarrow> (\<exists>n'>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = (Suc i) 
+              \<and> current_l (priority_JS_based_execution_aux bs Cs S JS I n') = current_l (priority_JS_based_execution_aux bs Cs S JS I n))"
+proof (intro impI ballI)
+  fix i
+  assume asm1:"i \<in> valid_qs I"
+  assume asm2:"(Suc i) < current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+  assume asm3:"current_q (priority_JS_based_execution_aux bs Cs S JS I n) = i"
+  show "\<exists>n'>n.
+                 current_q (priority_JS_based_execution_aux bs Cs S JS I n') = Suc i \<and>
+                 current_l (priority_JS_based_execution_aux bs Cs S JS I n') = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+  proof -
+    obtain Sn l q where
+      Haux: "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+      by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+    let ?p = "qth_program I q"
+    have eq:"q = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+      by(auto simp add:Haux)
+    have eq2:"l = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+      by(auto simp add:Haux)
+    have "?p \<in> I" sorry (*lemma for qth_program I q \in I for q in valid_qs I*)
+    with assms(1) have "\<exists>n'\<ge>n. (holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n' ?p)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). ?p\<in>J)"
+      by blast
+    have "\<exists>n'\<ge>n. ((holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n' ?p)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). ?p\<in>J)) 
+          \<and> (\<forall>n''<n'. \<not>( n''\<ge>n \<and> ((holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n'' ?p)) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p\<in>J))))"
+      using least_one_exists[of "(\<lambda>n''. n''\<ge>n \<and> ((holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n'' ?p)) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p\<in>J)))"]
+      using \<open>qth_program I q \<in> I\<close> assms(1) by auto
+    from this obtain n' where greater:"n'\<ge>n" and n'prop:"(holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n' ?p)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). ?p\<in>J)" 
+          and noo:"(\<forall>n''<n'. \<not>( n''\<ge>n \<and> ((holds_forall (lnot (bs ?p)) (priority_JS_based_execution bs Cs S JS I n'' ?p)) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p\<in>J))))"
+      by blast
+
+    have H1:"current_l (priority_JS_based_execution_aux bs Cs S JS I n') = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+      sorry (*some l preservation lemma usig noo*)
+    have H2:"current_q (priority_JS_based_execution_aux bs Cs S JS I n') = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+      sorry (*some q preservation lemma usig noo*)
+
+
+    obtain Sn' l' q' where
+      Haux': "priority_JS_based_execution_aux bs Cs S JS I n' = (Sn',l',q')"
+      by (cases "priority_JS_based_execution_aux bs Cs S JS I n'")
+
+    let ?p' = "qth_program I q'"
+    have eq':"q' = current_q (priority_JS_based_execution_aux bs Cs S JS I n')"
+      by(auto simp add:Haux')
+    have eq2':"l' = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+      by(auto simp add:Haux')
+    have "?p = ?p'" 
+      by (simp add: H2 eq eq')
+
+    have "q = q'" 
+      by(simp only:eq eq' H2)
+
+    have "l = l'" 
+      by(simp only:eq2 eq2' H1)
+    from asm2 have "Suc q < l" 
+      using Haux asm3 by fastforce
+    hence "Suc q' < l'" 
+      using \<open>l = l'\<close> \<open>q = q'\<close> by auto
+
+    have qprog:"current_q (priority_JS_based_execution_aux bs Cs S JS I (Suc n')) = (Suc q)"
+      apply(auto simp add:Haux' Let_def)
+      apply (auto simp add: H2 eq eq')
+      apply (metis Haux Haux' n'prop priority_JS_based_execution_def priority_picker_contains_p split_pairs)
+      using H1 Haux' asm2 asm3 apply auto[1]
+      using H1 Haux' asm2 asm3 apply force
+      using H1 Haux' asm2 asm3 by force
+
+    have lstay:"current_l (priority_JS_based_execution_aux bs Cs S JS I (Suc n')) = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+      apply(auto simp add: Haux' Let_def)
+      using H1 H2 Haux' asm2 asm3 apply auto[1]
+      using \<open>Suc q' < l'\<close> by auto
+      
+    have "(Suc n') > n"
+      using greater by auto
+    have " current_q (priority_JS_based_execution_aux bs Cs S JS I (Suc n')) = Suc q \<and>
+       current_l (priority_JS_based_execution_aux bs Cs S JS I (Suc n')) = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+      using H1 lstay qprog by presburger
+    thus ?thesis using \<open>(Suc n') > n\<close>
+      using asm3 eq by blast
+  qed
+qed
+
+
+lemma all_q_revisited2:
+  assumes "(\<forall>n. (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I \<noteq> {}"
+  shows "current_q (priority_JS_based_execution_aux bs Cs S JS I n) = q \<and> current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l \<longrightarrow> (\<forall>i\<in>(valid_qs I). i<l \<and> i\<ge>q \<longrightarrow> (\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i))"
+proof (intro impI, elim conjE, intro allI ballI impI, elim conjE)
+  assume asm1:"current_q (priority_JS_based_execution_aux bs Cs S JS I n) = q"
+  assume asm2:"current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l"
+  fix i
+  assume asm3:"i \<in> valid_qs I"
+  assume asm4:"i < l"
+  assume asm5:"q \<le> i"
+  show "\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i" 
+    using asm1 asm2 asm3 asm4 asm5
+  proof(induction "i-q" arbitrary:q n)
+    case 0
+    hence "i = q"
+      using asm1 asm5 by auto
+    then show ?case using 0 by auto
+  next
+    case (Suc x)
+    from lm2[of I n bs Cs S JS] assms(1) JS_nonempty assms(3) have
+      H:"\<forall>i\<in>valid_qs I.
+            current_q (priority_JS_based_execution_aux bs Cs S JS I n) = i \<longrightarrow>
+            Suc i < current_l (priority_JS_based_execution_aux bs Cs S JS I n) \<longrightarrow> (\<exists>n'>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = Suc i
+            \<and> current_l (priority_JS_based_execution_aux bs Cs S JS I n') = current_l (priority_JS_based_execution_aux bs Cs S JS I n))"
+      by auto
+    from Suc have "q = i \<or> q < i" by auto
+    then show ?case 
+    proof
+      assume "q = i"
+      then show ?case
+        using Suc  by blast
+    next
+      assume ssm:"q < i"
+      with Suc have "Suc q < l"
+        using less_trans_Suc by presburger
+      from \<open>q < i\<close> \<open>i \<in> valid_qs I\<close>  have "q \<in> valid_qs I"
+        by(auto)
+      from Suc \<open>Suc q < l\<close> have "(Suc q) < current_l (priority_JS_based_execution_aux bs Cs S JS I n)" by auto
+      from H \<open>q \<in> valid_qs I\<close>  \<open>current_q (priority_JS_based_execution_aux bs Cs S JS I n) = q\<close> \<open>(Suc q) < current_l (priority_JS_based_execution_aux bs Cs S JS I n)\<close>  
+      obtain n' where "n'>n" and sucq:"current_q (priority_JS_based_execution_aux bs Cs S JS I n') = Suc q"
+                and leq:"current_l (priority_JS_based_execution_aux bs Cs S JS I n') = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+        by auto
+      from Suc have "x = i - Suc q" by auto
+      with Suc(1)[of "Suc q" n'] sucq leq \<open>i \<in> valid_qs I\<close> \<open>i < l\<close> ssm
+      show ?case by (smt (verit, ccfv_threshold) Suc.prems(2) \<open>n < n'\<close> linorder_not_less nless_le not_less_eq order_less_le_trans)
+    qed
+  qed
+qed
+
+
+
+lemma lm:
+  assumes "(\<forall>n.(\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I \<noteq> {}"
+  shows "\<forall>i\<in>valid_qs I. current_l (priority_JS_based_execution_aux bs Cs S JS I n) = (Suc i) \<longrightarrow> (Suc i) \<in> (valid_qs I) \<longrightarrow> (\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = (Suc (Suc i))
+          \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+proof (intro impI ballI)
+  fix i
+  assume asm1:"i \<in> valid_qs I"
+  assume asm2:"Suc i \<in> valid_qs I"
+  assume asm3:"current_l (priority_JS_based_execution_aux bs Cs S JS I n) = (Suc i)"
+
+  obtain Sn l q where
+    Haux: "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+  let ?p = "qth_program I q"
+  have eq:"q = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+    by(auto simp add:Haux)
+  have eq2:"l = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+    by(auto simp add:Haux)
+
+  have "l > 0" sorry (*eq2*)
+
+  have "(l-1) \<in> valid_qs I" using l_belonging_lemma[of I bs Cs S JS n] assms(3) eq2
+    by simp
+
+  have "l-1 < l" using \<open>l > 0\<close> by auto
+
+  have "q \<le> l-1"
+    apply(simp only:eq eq2)
+    by (metis Suc_pred' \<open>0 < l\<close> eq2 less_Suc_eq_le q_l_inequality_lemma)
+
+  from all_q_revisited2[of I bs Cs S JS n q l] assms 
+  have "(\<forall>i\<in>valid_qs I.
+             i < l \<and> q \<le> i \<longrightarrow>
+             (\<exists>n'\<ge>n.
+                 current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l \<and>
+                 current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i))"
+    using eq eq2 by blast
+  with \<open>l-1 < l\<close> \<open>q \<le> l-1\<close> \<open>(l-1) \<in> valid_qs I\<close> obtain n' where "n'\<ge>n" and 
+                 newl:"current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l" and
+                 newq:"current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
+    using asm3 eq2 by auto
+
+  obtain Sn' l' q' where
+    Haux': "priority_JS_based_execution_aux bs Cs S JS I n' = (Sn',l',q')"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n'")
+
+  let ?p' = "qth_program I q'"
+  have eq':"q' = current_q (priority_JS_based_execution_aux bs Cs S JS I n')"
+    by(auto simp add:Haux')
+  have eq2':"l' = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+    by(auto simp add:Haux')
+
+  have "?p' \<in> I" sorry
+
+
+  with assms(1) \<open>?p' \<in> I\<close> have "\<exists>n''\<ge>n'. (holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)"
+      by blast
+  have "\<exists>n''\<ge>n'. ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)) 
+        \<and> (\<forall>n'''<n''. \<not>( n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J))))"
+    using least_one_exists[of "(\<lambda>n'''. n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J)))"]
+    using \<open>qth_program I q' \<in> I\<close> assms(1) by auto
+  from this obtain n'' where greater:"n''\<ge>n'" and n'prop:"(holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)" 
+        and noo:"(\<forall>n'''<n''. \<not>( n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J))))"
+    by blast
+
+  have H1:"current_l (priority_JS_based_execution_aux bs Cs S JS I n'') = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+    sorry (*some l preservation lemma usig noo*)
+  have H2:"current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = current_q (priority_JS_based_execution_aux bs Cs S JS I n')"
+    sorry (*some q preservation lemma usig noo*)
+
+
+  obtain Sn'' l'' q'' where
+    Haux'': "priority_JS_based_execution_aux bs Cs S JS I n'' = (Sn'',l'',q'')"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n''")
+
+  let ?p'' = "qth_program I q''"
+  have eq'':"q'' = current_q (priority_JS_based_execution_aux bs Cs S JS I n'')"
+    by(auto simp add:Haux'')
+  have eq2'':"l'' = current_l (priority_JS_based_execution_aux bs Cs S JS I n'')"
+    by(auto simp add:Haux'')
+  have eq3'':"Sn'' = priority_JS_based_execution bs Cs S JS I n''"
+    by(auto simp add:priority_JS_based_execution_def Haux'')
+
+  have "l = (Suc i)" using asm3 eq2 by simp
+
+  have "\<not> Suc q'' < l''" 
+    apply(simp add: eq'' H2 eq2'' H1 eq2' newl eq' newq)
+    by (simp add: \<open>l = Suc i\<close>)
+
+  have qeq:"q'' = q'"
+    by(simp add:eq' eq'' H2)
+
+  have "l'' \<in> (valid_qs I)" 
+    apply(simp only:eq2'' H1 newl \<open>l = (Suc i)\<close>)
+    by (simp add: asm2)
+  hence nextl:"next_len I l'' = Suc l''"
+    by(auto simp add:next_len_def)
+
+  have "current_l (priority_JS_based_execution_aux bs Cs S JS I (Suc n'')) 
+          = Suc (current_l (priority_JS_based_execution_aux bs Cs S JS I n''))"
+    using \<open>\<not> Suc q'' < l''\<close> nextl
+    apply(auto simp add:Haux'' Let_def eq3'')
+    using n'prop
+    apply(simp only:qeq[symmetric])
+    by (simp add: priority_picker_contains_p)
+
+  moreover have "current_q (priority_JS_based_execution_aux bs Cs S JS I (Suc n'')) 
+          = 0"
+    using \<open>\<not> Suc q'' < l''\<close> nextl
+    apply(auto simp add:Haux'' Let_def eq3'')
+    using n'prop
+    apply(simp only:qeq[symmetric])
+    by (simp add: priority_picker_contains_p)
+
+  moreover have "(Suc n'')>n" using \<open>n \<le> n'\<close> greater by auto
+  ultimately show "\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (Suc i) \<and>
+                 current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0" using newl H1 \<open>l = (Suc i)\<close>
+    by metis
+qed
+
+
+
+lemma all_q_revisited1:
+  assumes "(\<forall>n. (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I\<noteq>{}"
+ shows "current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l \<longrightarrow> (\<forall>i\<in>valid_qs I. (Suc i) > l \<longrightarrow>(\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = (Suc i) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0))"
+proof (intro impI allI ballI)
+  assume asm1:"current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l"
+  fix i
+  assume asm2:"i \<in> valid_qs I"
+  assume asm3:"l < Suc i"
+  from asm1 l_belonging_lemma assms(3) have H:"(l-1)\<in>valid_qs I" by blast 
+  show "\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = (Suc i) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0" 
+    using asm3 asm1 asm2 H
+  proof (induction "Suc i - l" arbitrary:l n)
+    case 0
+    then show ?case by auto
+  next
+    case (Suc x)
+    have "l \<in> valid_qs I" using \<open>i \<in> valid_qs I\<close> \<open>l < Suc i\<close>
+      by(auto)
+    have "l > 0" sorry (*from asm1*)
+    hence "Suc (l-1) = l" by simp
+    from lm[of I bs Cs S JS n] \<open>(l-1)\<in>valid_qs I\<close> assms
+    have "current_l (priority_JS_based_execution_aux bs Cs S JS I n) = Suc (l-1) \<longrightarrow>
+       Suc (l-1) \<in> valid_qs I \<longrightarrow>
+       (\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (Suc (l-1)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+      by auto
+    from this have "current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l \<longrightarrow>
+       l \<in> valid_qs I \<longrightarrow>
+       (\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (l) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+      by(simp only:\<open>Suc (l-1) = l\<close>)
+    from this obtain n' where "n'>n" and ott:"current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (l) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0"
+      using Suc \<open>l \<in> valid_qs I\<close> by blast
+    from Suc have "x = Suc i - Suc l" 
+      by (metis Suc.hyps(2) Suc.prems(1) Suc_diff_Suc nat.inject)
+    have "(Suc l) = Suc i \<or> Suc l < Suc i"
+      using Suc.prems(1) Suc_lessI by blast
+    then show ?case
+    proof 
+      assume "Suc l = Suc i"
+      with ott show ?case
+        using \<open>n < n'\<close> less_or_eq_imp_le by blast
+    next
+      assume "Suc l < Suc i"
+      from \<open>l \<in> valid_qs I\<close> \<open>(l-1)\<in>valid_qs I\<close> have "Suc l - 1 \<in> valid_qs I" 
+        by(auto)
+      have "(\<exists>n'>n.
+             current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc i \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+        using Suc(1)[of "(Suc l)" n'] \<open>x = Suc i - Suc l\<close> \<open>Suc l < Suc i\<close> \<open>Suc l - 1 \<in> valid_qs I\<close> ott
+        using \<open>n < n'\<close> order.strict_trans2
+        using asm2 by blast
+      then show ?case  
+        using less_or_eq_imp_le by blast
+    qed
+  qed
+qed
+
+
+lemma lm3:
+  assumes "(\<forall>n.(\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I \<noteq> {}"
+   and "finite I"
+ shows "current_l (priority_JS_based_execution_aux bs Cs S JS I n) = card I \<longrightarrow> 
+          (\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = card I
+                    \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+proof (intro impI ballI)
+  assume asm:"current_l (priority_JS_based_execution_aux bs Cs S JS I n) = card I"
+
+  obtain Sn l q where
+    Haux: "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+  let ?p = "qth_program I q"
+  have eq:"q = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+    by(auto simp add:Haux)
+  have eq2:"l = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+    by(auto simp add:Haux)
+
+  have "l > 0" sorry (*eq2*)
+
+  have "(l-1) \<in> valid_qs I" using l_belonging_lemma[of I bs Cs S JS n] assms(3) eq2
+    by simp
+
+  have "l-1 < l" using \<open>l > 0\<close> by auto
+
+  have "q \<le> l-1"
+    apply(simp only:eq eq2)
+    by (metis Suc_pred' \<open>0 < l\<close> eq2 less_Suc_eq_le q_l_inequality_lemma)
+
+  from all_q_revisited2[of I bs Cs S JS n q l] assms 
+  have "(\<forall>i\<in>valid_qs I.
+             i < l \<and> q \<le> i \<longrightarrow>
+             (\<exists>n'\<ge>n.
+                 current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l \<and>
+                 current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i))"
+    using eq eq2 by blast
+  with \<open>l-1 < l\<close> \<open>q \<le> l-1\<close> \<open>(l-1) \<in> valid_qs I\<close> obtain n' where "n'\<ge>n" and 
+                 newl:"current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l" and
+                 newq:"current_q (priority_JS_based_execution_aux bs Cs S JS I n') = (l-1)"
+    using asm eq2 by auto
+
+  obtain Sn' l' q' where
+    Haux': "priority_JS_based_execution_aux bs Cs S JS I n' = (Sn',l',q')"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n'")
+
+  let ?p' = "qth_program I q'"
+  have eq':"q' = current_q (priority_JS_based_execution_aux bs Cs S JS I n')"
+    by(auto simp add:Haux')
+  have eq2':"l' = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+    by(auto simp add:Haux')
+
+  have "?p' \<in> I" sorry
+
+
+  with assms(1) \<open>?p' \<in> I\<close> have "\<exists>n''\<ge>n'. (holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)"
+      by blast
+  have "\<exists>n''\<ge>n'. ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)) 
+        \<and> (\<forall>n'''<n''. \<not>( n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J))))"
+    using least_one_exists[of "(\<lambda>n'''. n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J)))"]
+    using \<open>qth_program I q' \<in> I\<close> assms(1) by auto
+  from this obtain n'' where greater:"n''\<ge>n'" and n'prop:"(holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n'' ?p')) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). ?p'\<in>J)" 
+        and noo:"(\<forall>n'''<n''. \<not>( n'''\<ge>n' \<and> ((holds_forall (lnot (bs ?p')) (priority_JS_based_execution bs Cs S JS I n''' ?p')) \<or> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). ?p'\<in>J))))"
+    by blast
+
+  have H1:"current_l (priority_JS_based_execution_aux bs Cs S JS I n'') = current_l (priority_JS_based_execution_aux bs Cs S JS I n')"
+    sorry (*some l preservation lemma usig noo*)
+  have H2:"current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = current_q (priority_JS_based_execution_aux bs Cs S JS I n')"
+    sorry (*some q preservation lemma usig noo*)
+
+
+  obtain Sn'' l'' q'' where
+    Haux'': "priority_JS_based_execution_aux bs Cs S JS I n'' = (Sn'',l'',q'')"
+    by (cases "priority_JS_based_execution_aux bs Cs S JS I n''")
+
+  let ?p'' = "qth_program I q''"
+  have eq'':"q'' = current_q (priority_JS_based_execution_aux bs Cs S JS I n'')"
+    by(auto simp add:Haux'')
+  have eq2'':"l'' = current_l (priority_JS_based_execution_aux bs Cs S JS I n'')"
+    by(auto simp add:Haux'')
+  have eq3'':"Sn'' = priority_JS_based_execution bs Cs S JS I n''"
+    by(auto simp add:priority_JS_based_execution_def Haux'')
+
+  have "l = card I" using asm eq2 by simp
+
+  have "\<not> Suc q'' < l''" 
+    by(simp add: eq'' H2 eq2'' H1 eq2' newl eq' newq)
+
+  have qeq:"q'' = q'"
+    by(simp add:eq' eq'' H2)
+
+
+  hence nextl:"next_len I l'' = l''"
+    using assms(4)
+    by(auto simp add:next_len_def \<open>l = card I\<close> eq2'' H1 eq2' newl)
+
+  have "current_l (priority_JS_based_execution_aux bs Cs S JS I (Suc n'')) 
+          = (current_l (priority_JS_based_execution_aux bs Cs S JS I n''))"
+    using \<open>\<not> Suc q'' < l''\<close> nextl
+    by(auto simp add:Haux'' Let_def eq3'')
+
+  moreover have "current_q (priority_JS_based_execution_aux bs Cs S JS I (Suc n''))  = 0"
+    using \<open>\<not> Suc q'' < l''\<close> nextl
+    apply(auto simp add:Haux'' Let_def eq3'')
+    using n'prop
+    apply(simp only:qeq[symmetric])
+    by (simp add: priority_picker_contains_p)
+
+  moreover have "(Suc n'')>n" using \<open>n \<le> n'\<close> greater by auto
+  ultimately show "\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = card I \<and>
+                 current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0" using newl H1 \<open>l = card I\<close>
+    by metis
+qed
+
+(*lemma all_q_revisited1p2:
+  assumes "(\<forall>n. (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I\<noteq>{}"
+   and "finite I"
+ shows "current_l (priority_JS_based_execution_aux bs Cs S JS I n) = l \<longrightarrow> (\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = l \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+*)
+    (*obtain Sn l q where
+      Haux: "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+      by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+    let ?p = "qth_program I q"
+    let ?J = "priority_picker JS ?p n Sn" 
+    have eq:"q = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+      by(auto simp add:Haux)
+    from eq q_belonging_lemma assms(3) have "q \<in> valid_qs I"
+      by blast
+    from assms(1) obtain n' where "n'\<ge>n" and "(holds_forall (lnot (bs p)) (priority_JS_based_execution bs Cs S JS I n' p)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). p\<in>J)"
+      using \<open>p\<in>I\<close> by blast
+    then show "\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = (Suc i) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0"
+      sorry*)
+
+
+
+lemma all_q_revisited:
+  assumes "(\<forall>n. (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+   and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
+   and "I \<noteq> {}"
+ shows "\<forall>i \<in> I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or>  (\<exists>n'\<ge>n. (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
+proof -
+  have "\<forall>i\<in>valid_qs I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i)"
+  proof (intro allI ballI)
+    fix i n
+    assume asm:"i\<in> (if finite I then {0..<card I} else UNIV)"
+    from assms have "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or>  
+  (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J)))" by auto
+    thus "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i)"
+    proof
+      assume "holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n)"
+      thus ?thesis by auto
+    next 
+      assume asm2:"(\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J)))"
+      show ?thesis
+      proof (rule disjI2)
+        obtain Sn l q where
+          Haux: "priority_JS_based_execution_aux bs Cs S JS I n = (Sn,l,q)"
+          by (cases "priority_JS_based_execution_aux bs Cs S JS I n")
+        have eq:"q = current_q (priority_JS_based_execution_aux bs Cs S JS I n)"
+          by(auto simp add:Haux)
+        have eq2:"l = current_l (priority_JS_based_execution_aux bs Cs S JS I n)"
+          by(auto simp add:Haux)
+        have maxgeq:"(max l (Suc i)) \<ge> l" 
+          by auto
+        from l_belonging_lemma[of I bs Cs S JS n] assms(3) eq2 asm
+        have fincard:"finite I \<longrightarrow> (max l (Suc i)) \<le> card I"
+          by(auto)
+        have "(\<not> finite I \<or> (finite I \<and> ((max l (Suc i)) < card I) \<or> (Suc i) > l)) \<or> finite I \<and> l = card I" using fincard by auto
+        thus "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
+        proof
+          assume asmf:"\<not> finite I \<or> (finite I \<and> ((max l (Suc i)) < card I) \<or> (Suc i) > l)"
+          have "Suc (max l (Suc i)) > l" by auto
+          have "(max l (Suc i)) \<in> valid_qs I \<or> (max l (Suc i)) > l" using asmf by(auto)
+          thus "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
+          proof
+            assume valm:"max l (Suc i) \<in> valid_qs I"
+            from valm all_q_revisited1[of I bs Cs S JS n l]  eq2  l_belonging_lemma[of I bs Cs S JS n] assms(3) asm2 JS_nonempty \<open>I \<noteq> {}\<close> \<open>Suc (max l (Suc i)) > l\<close> asm assms(1)
+            have "(\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+              by (metis)
+            from this obtain n' where "n'\<ge> n" and "current_l (priority_JS_based_execution_aux bs Cs S JS I n') = Suc (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0"
+                      by blast
+            with assms(1) all_q_revisited2[of I bs Cs S JS n' 0 "Suc (max l (Suc i))"] JS_nonempty assms(1)
+            have "(\<forall>i'\<in>(valid_qs I). i'<Suc (max l (Suc i)) \<and> i'\<ge>0 \<longrightarrow> (\<exists>n''\<ge>n'. current_l (priority_JS_based_execution_aux bs Cs S JS I n'') = Suc (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i'))"
+              using assms(3) by blast
+            from this \<open>i\<in>(valid_qs I)\<close> obtain n'' where "n''\<ge>n'" and "(current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i)"
+              by fastforce
+            thus "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i" using \<open>n''\<ge>n'\<close> \<open>n'\<ge>n\<close>
+              using le_trans by blast
+          next
+            assume "(max l (Suc i)) > l"
+            from all_q_revisited1[of I bs Cs S JS n l]  eq2  l_belonging_lemma[of I bs Cs S JS n] assms(3) asm2 JS_nonempty \<open>I \<noteq> {}\<close> \<open>(max l (Suc i)) > l\<close> asm assms(1)
+            have "(\<exists>n'\<ge>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+              by simp
+            from this obtain n' where "n'\<ge> n" and "current_l (priority_JS_based_execution_aux bs Cs S JS I n') =  (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0"
+                      by blast
+            with assms(1) all_q_revisited2[of I bs Cs S JS n' 0 " (max l (Suc i))"] JS_nonempty assms(1)
+            have "(\<forall>i'\<in>(valid_qs I). i'< (max l (Suc i)) \<and> i'\<ge>0 \<longrightarrow> (\<exists>n''\<ge>n'. current_l (priority_JS_based_execution_aux bs Cs S JS I n'') =  (max l (Suc i)) \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i'))"
+              using assms(3) by blast
+            from this \<open>i\<in>(valid_qs I)\<close> obtain n'' where "n''\<ge>n'" and "(current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i)"
+              by fastforce
+            thus "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i" using \<open>n''\<ge>n'\<close> \<open>n'\<ge>n\<close>
+              using le_trans by blast
+          qed
+        next
+          assume asm:"finite I \<and> l = card I"
+          with lm3[of I bs Cs S JS n] eq2
+          have "(\<exists>n'>n. current_l (priority_JS_based_execution_aux bs Cs S JS I n') = card I \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0)"
+            using JS_nonempty assms(1,3) by blast
+          from this obtain n' where "n'> n" and "current_l (priority_JS_based_execution_aux bs Cs S JS I n') =  card I \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n') = 0"
+                      by blast
+          with assms(1) all_q_revisited2[of I bs Cs S JS n' 0 "card I"] JS_nonempty assms(1)
+          have "(\<forall>i'\<in>(valid_qs I). i'< card I \<and> i'\<ge>0 \<longrightarrow> (\<exists>n''\<ge>n'. current_l (priority_JS_based_execution_aux bs Cs S JS I n'') =  card I \<and> current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i'))"
+            using assms(3) by blast
+          from this \<open>i\<in>(valid_qs I)\<close> asm obtain n'' where "n''\<ge>n'" and "(current_q (priority_JS_based_execution_aux bs Cs S JS I n'') = i)"
+            by fastforce
+          thus "\<exists>n'\<ge>n. current_q (priority_JS_based_execution_aux bs Cs S JS I n') = i"
+            by (metis \<open>n < n'\<close> dual_order.trans order_less_imp_le)
+        qed
+      qed
+    qed
+  qed
+  with qs_to_progs show ?thesis by blast
+qed
+
 lemma all_programs_reexecuted_or_dead:
-  assumes "(\<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) 
-    \<or> (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
+  assumes "(\<forall>n. (\<forall>i\<in>I. (\<exists>n'\<ge>n. (holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)) \<or> (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i\<in>J))))"
     and "\<forall>i \<in> I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (priority_JS_based_execution bs Cs S JS I n) \<or> (\<exists>n'\<ge>n. (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
     and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
   shows "\<forall>i\<in>I. \<forall>n. \<not>(holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n i)) \<longrightarrow> 
@@ -3896,12 +4599,12 @@ proof(intro relational_hyper_hoare_tripleI)
           assume asm: "i \<in> I"
           from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                              and jinJS:"J' \<in> JS n (?Ss n)" by blast
-          have H1:"(\<forall>i\<in>I. \<forall>n. holds_forall_hyper I (lnot_hyper bs) (?Ss n) \<or> (\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J)))" 
+          have H1:"(\<forall>i\<in>I. \<forall>n. (\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J)))" 
           proof (intro allI ballI)
             fix i n
             assume "i\<in>I"
             from jsexec_ivq have "(Iv n (?Ss n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss n))" by auto
-            thus "holds_forall_hyper I (lnot_hyper bs) (?Ss n) \<or> (\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J))"
+            thus "(\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J))"
             proof 
               assume "Iv n (?Ss n)"
               with \<open>i\<in>I\<close> assms(2) have "\<exists>n'\<ge>n. entails (Iv n') (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> V J S))"
@@ -3931,11 +4634,13 @@ proof(intro relational_hyper_hoare_tripleI)
               qed
             next
               assume "holds_forall_hyper I (lnot_hyper bs) (?Ss n)"
+              hence "\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n i) \<longrightarrow> (\<exists>J\<in>JS n (priority_JS_based_execution bs Cs S JS I n). i \<in> J)"
+                using \<open>i\<in>I\<close> by(auto simp add:holds_forall_def lnot_def holds_forall_hyper_def lnot_hyper_def) 
               thus ?thesis by auto
             qed
           qed
           let ?executes = "(\<lambda>n'. \<lambda>i. \<lambda>JS. (\<exists>J' \<in> JS n' (?Ss n'). (i \<in> J') \<and> (?Ss (Suc n') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n'))))"
-          from H1 all_q_revisited[of I bs Cs S JS] all_programs_reexecuted_or_dead[of I bs Cs S JS] JS_nonempty
+          from H1 all_q_revisited[of I bs Cs S JS] all_programs_reexecuted_or_dead[of I bs Cs S JS] JS_nonempty \<open>I \<noteq> {}\<close>
               have "\<forall>n. \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss n) i)) 
             \<or> (\<exists>n' \<ge> n. ?executes n' i JS)" by (smt (z3))
               (*proof (intro allI ballI)
