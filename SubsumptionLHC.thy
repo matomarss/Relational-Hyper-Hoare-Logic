@@ -1,5 +1,5 @@
 theory SubsumptionLHC
-  imports Main "HOL-Library.Countable" SyntacticRelationalAssertions
+  imports SyntacticRelationalAssertions
 begin
 
 text\<open> IMPORTANT!
