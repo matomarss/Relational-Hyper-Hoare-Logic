@@ -515,7 +515,21 @@ proof (rule relational_hyper_hoare_tripleI)
 qed
 
 
-
+corollary rel_extension_by_lockstep_seq:
+  assumes "\<Turnstile> { P } [ Cs ] { R }"
+      and "\<Turnstile> { R } [ Cs' ] { Q }"
+      and "dom Cs \<inter> dom Cs' = {}"
+    shows "\<Turnstile> { P } [ Cs ++ Cs' ] { Q }"
+proof -
+  have "Cs ++ Cs' = hyper_seq Cs Cs'"
+    unfolding hyper_seq_def map_add_def
+    apply(rule)
+    apply(auto split:option.split)
+     apply (metis option.collapse seq_opt.simps(2,3))
+    using assms(3)
+    by (metis disjoint_iff_not_equal domI domIff seq_opt.simps(3))
+  with lockstep_seq show ?thesis using assms(1) assms(2) by auto
+qed
 
 subsection \<open>Assume rule\<close>
 
@@ -2130,7 +2144,7 @@ qed
 text\<open>
   Moves all while loops in a fixed lockstep. 
   They need to be synchronous and thus perform the same number of repetitions.
-\<close>(*
+\<close>
 theorem while_lockstep:
     assumes "\<Turnstile> { conj Iv (holds_forall_hyper I bs) } [[i \<mapsto> (Cs i) | i \<in> I]] { conj Iv (low_exp_hyper I bs)}"
     shows   "\<Turnstile> { conj Iv (low_exp_hyper I bs)} [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
@@ -2806,7 +2820,7 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
   thus ?thesis 
     by (simp add: relational_hyper_hoare_tripleI while_cond_def)
 qed
-*)
+
 
 
 (*
@@ -3031,7 +3045,7 @@ lemma while_unfolded: "(\<forall>i\<in>I. (rf i) > 0) \<Longrightarrow> sem_lift
   apply(intro impI)
   using while_unfolded_sem by blast
 
-(*
+
 theorem while_fixed_alignment:
   assumes "\<Turnstile> { conj Iv (holds_forall_hyper I bs)} [[i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I]] { conj Iv (low_exp_hyper I bs)}" 
       and "(\<forall>i\<in>I. (rf i) > 0)"
@@ -3040,7 +3054,7 @@ proof -
   from assms(1) while_lockstep have "\<Turnstile> { conj Iv (low_exp_hyper I bs)} [[ i \<mapsto> (while_cond (bs i) (repeat_with_if (rf i) (bs i) (Cs i))) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}" by auto
   with assms(2) show ?thesis unfolding relational_hyper_hoare_triple_def using while_unfolded 
     by (metis (mono_tags, lifting))
-qed*)
+qed
 
 (*1. Needed to abolish the idea of proving the equality of the sem_after_m_steps and the while semantics directly, as the induction could not be performed because of induction step of the while only did advance by one step and i needed rf(i) steps*)
 (*
@@ -4776,6 +4790,22 @@ proof (intro allI ballI impI)
   qed
 qed
 
+abbreviation all_unfinished_can_be_stepped_after3 where
+"all_unfinished_can_be_stepped_after3 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> ((V n' J) S))))))" 
+
+abbreviation can_step_subset_or_all_finished3 where
+"can_step_subset_or_all_finished3 n I bs V \<equiv> (disj (disj_I (Pow I - {{}}) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
+
+
+(*theorem while_nonfixed_alignment7:
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V n J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after3 n Iv I bs V)"
+      and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs (V n))"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
+      and   "I \<noteq> {}"
+    shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+ *)
 
 theorem while_nonfixed_alignment6:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
@@ -6337,7 +6367,58 @@ lemma reindexing_preserves_no_exist_state:
 
 
 section \<open>Other useful rules\<close>
+(*
+abbreviation sequential_prec_hyper_set where
+"sequential_prec_hyper_set S \<equiv> S(1 := (S 0))"
 
+abbreviation sequential_prec where
+"sequential_prec P S \<equiv> P (sequential_prec_hyper_set S)"
+
+abbreviation parallel_post_hyper_set where
+"parallel_post_hyper_set S mods \<equiv> S(0 := {(fst \<sigma>0, override_on (snd \<sigma>0) (snd \<sigma>1) mods) | \<sigma>0 \<sigma>1. \<sigma>0 \<in> S 0 \<and> \<sigma>1 \<in> S 1 \<and> (fst \<sigma>0) = (fst \<sigma>1)})"
+
+abbreviation parallel_post where
+"parallel_post Q mods S \<equiv> Q (parallel_post_hyper_set S mods)"
+
+
+
+
+theorem sequence_parallel:
+  assumes  "\<Turnstile> { P } [[0 \<mapsto> C0, 1 \<mapsto> (interp_syn_stmt C1)] ++ Cs'] {parallel_post Q (written_vars (interp_syn_stmt C1))}"
+      and  "written_vars C0 \<inter> set (pvar C1) = {}"
+      and  "0 \<notin> dom Cs' \<and> 1 \<notin> dom Cs'"
+      and  "entails (sequential_prec P) (\<lambda>S. \<forall>s1\<in>(S 0). \<forall>s2\<in>(S 0). (fst s1) = (fst s2) \<longrightarrow> (snd s1) = (snd s2))"
+    shows  "\<Turnstile> { sequential_prec P } [[0 \<mapsto> C0;;(interp_syn_stmt C1)] ++ Cs'] { Q }"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume asm:"sequential_prec P S"
+  let ?S' = "sequential_prec_hyper_set S"
+  let ?postS_par = "(sem_lifted ([0 \<mapsto> C0, 1 \<mapsto> (interp_syn_stmt C1)] ++ Cs') ?S')"
+  let ?postS_seq = "(sem_lifted ([0 \<mapsto> C0 ;; interp_syn_stmt C1] ++ Cs') S)"
+  let ?mods = "(written_vars (interp_syn_stmt C1))"
+  from asm have "P ?S'" by(auto)
+  with assms(1) have H1: "(parallel_post Q (written_vars (interp_syn_stmt C1))) ?postS_par"
+    using relational_hyper_hoare_tripleE by auto
+  have "?postS_seq = parallel_post_hyper_set ?postS_par ?mods"
+  proof (rule)
+    fix i::nat
+    have " i > 1 \<or> i = 0 \<or> i = 1" by auto
+    thus "?postS_seq i = parallel_post_hyper_set ?postS_par ?mods i"
+    proof(elim disjE)
+      assume "i > 1"
+      thus "?postS_seq i = parallel_post_hyper_set ?postS_par ?mods i"
+        using assms(3)
+        by(auto simp add:sem_lifted_def fun_upd_def map_add_def)
+    next
+      assume "i=0"
+      thus "?postS_seq i = parallel_post_hyper_set ?postS_par ?mods i"
+        using assms(3)
+        apply(auto simp add:sem_lifted_def fun_upd_def map_add_def)
+       
+  with H1 show "Q ?postS_seq" by simp
+qed
+
+*)
 
 abbreviation assume_hyper_set where
 "assume_hyper_set I Bs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>) |l \<sigma>. (l, \<sigma>) \<in> (S i) \<and> (Bs i) \<sigma>} else S i))"
@@ -7039,6 +7120,4 @@ proof -
     qed
   qed
 qed
-
-
 end
