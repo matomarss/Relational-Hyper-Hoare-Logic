@@ -948,7 +948,7 @@ lemma same_mod_updates_union_duplicate:
   by (metis subset_mod_updates_trans subset_mod_updates_union sup.idem)
 
 
-lemma lift_fv_mod_condition_powerset_to_downwards_closed:
+(*lemma lift_fv_mod_condition_powerset_to_downwards_closed:
   assumes "hyper_independent_vars vars F"
       and downwards_closed: "\<And>S S'. S' \<in> F \<Longrightarrow> S \<subseteq> S' \<Longrightarrow> S \<in> F"
     shows "\<exists>maxis. F = (\<Union>f\<in>maxis. {S. S\<subseteq>f}) \<and> (\<forall>f \<in> maxis. hyper_independent_vars vars {S. S\<subseteq>f})"
@@ -957,7 +957,7 @@ proof -
   define maxis where "maxis = { S. ?is_max S}"
 
   have r0: "F = (\<Union>f\<in>maxis. {S. S\<subseteq>f})"
-    sorry
+    
 
   moreover have "\<And>f. f \<in> maxis \<Longrightarrow> hyper_independent_vars vars {S. S\<subseteq>f}"
   proof -
@@ -987,7 +987,7 @@ proof -
   qed
   ultimately show ?thesis
     by blast
-qed
+qed*)
 
 
 

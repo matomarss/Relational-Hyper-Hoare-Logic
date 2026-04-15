@@ -1,7 +1,7 @@
 section \<open>Syntactic Relational Assertions\<close>
 
 theory SyntacticRelationalAssertions
-  imports Logic Loops ProgramHyperproperties Compositionality "~~/src/HOL/Library/While_Combinator" "HOL-Computational_Algebra.Primes"
+  imports Logic Loops ProgramHyperproperties  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes"
 begin
 
 subsection \<open>Preliminaries: Types, expressions, 'a syn_assertions\<close>
