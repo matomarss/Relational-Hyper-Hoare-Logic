@@ -1,7 +1,7 @@
 section \<open>Syntactic Relational Assertions\<close>
 
 theory SyntacticRelationalAssertions
-  imports Loops  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes"
+  imports Loops  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes" "HOL-Library.FuncSet"
 begin
 
 subsection \<open>Preliminaries: Types, expressions, 'a syn_assertions\<close>
@@ -4790,6 +4790,35 @@ proof (intro allI ballI impI)
   qed
 qed
 
+
+(*
+abbreviation to_nat where
+"to_nat I \<equiv> {f. \<forall>x. x \<in> I \<longrightarrow> f x \<in> (UNIV::nat set)}"
+
+abbreviation to_zero where
+"to_zero I \<equiv> {f. \<forall>x. x \<in> I \<longrightarrow> f x = 0}"
+
+abbreviation all_unfinished_can_be_stepped_after4 where
+"all_unfinished_can_be_stepped_after4 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(to_nat I). (J i > 0) \<and> ((V J) S))))))" 
+
+abbreviation can_step_subset_or_all_finished4 where
+"can_step_subset_or_all_finished4 I bs V \<equiv> (disj (disj_I ((to_nat I) - (to_zero I)) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
+
+
+theorem while_nonfixed_alignment8:
+  assumes   "\<forall>n. \<forall>J \<in> (to_nat I) - (to_zero I).  \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto>  repeat_with_if (J i) (bs i) (Cs i) | i \<in> I]] { Iv (Suc n) }"
+      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after4 n Iv I bs V)"
+      and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished4 I bs V)"
+      and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+      and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
+      and   "I \<noteq> {}"
+    shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+ 
+*)
+
+
+
+(*
 abbreviation all_unfinished_can_be_stepped_after3 where
 "all_unfinished_can_be_stepped_after3 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> ((V n' J) S))))))" 
 
@@ -4797,7 +4826,7 @@ abbreviation can_step_subset_or_all_finished3 where
 "can_step_subset_or_all_finished3 n I bs V \<equiv> (disj (disj_I (Pow I - {{}}) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
 
 
-(*theorem while_nonfixed_alignment7:
+theorem while_nonfixed_alignment7:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V n J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after3 n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs (V n))"
