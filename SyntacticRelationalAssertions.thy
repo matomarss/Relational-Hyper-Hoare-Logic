@@ -4792,21 +4792,16 @@ qed
 
 
 (*
-abbreviation to_nat where
-"to_nat I \<equiv> {f. \<forall>x. x \<in> I \<longrightarrow> f x \<in> (UNIV::nat set)}"
-
-abbreviation to_zero where
-"to_zero I \<equiv> {f. \<forall>x. x \<in> I \<longrightarrow> f x = 0}"
-
 abbreviation all_unfinished_can_be_stepped_after4 where
-"all_unfinished_can_be_stepped_after4 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(to_nat I). (J i > 0) \<and> ((V J) S))))))" 
+"all_unfinished_can_be_stepped_after4 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.
+                                                       (entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J::nat\<Rightarrow>nat. (J i > 0) \<and> ((V J) S))))))" 
 
 abbreviation can_step_subset_or_all_finished4 where
-"can_step_subset_or_all_finished4 I bs V \<equiv> (disj (disj_I ((to_nat I) - (to_zero I)) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
+"can_step_subset_or_all_finished4 I bs V \<equiv> (disj (disj_I {J::nat\<Rightarrow>nat. (\<exists>i\<in>I. J i > 0)} (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
 
 
 theorem while_nonfixed_alignment8:
-  assumes   "\<forall>n. \<forall>J \<in> (to_nat I) - (to_zero I).  \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto>  repeat_with_if (J i) (bs i) (Cs i) | i \<in> I]] { Iv (Suc n) }"
+  assumes   "\<forall>n. \<forall>J::nat\<Rightarrow>nat. (\<exists>i\<in>I. J i > 0) \<longrightarrow>  \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto>  repeat_with_if (J i) (bs i) (Cs i) | i \<in> I]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after4 n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished4 I bs V)"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
