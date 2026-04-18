@@ -7158,10 +7158,11 @@ fun len :: "int_and_list \<Rightarrow> int_and_list" where
 "len (ListV xs) = IntV (int(length xs))" |
 "len _ = undefined"
 
-fun at_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" ("_[_]" [1000, 0] 1000) where
+fun at_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" (infixl "!\<^sub>o" 100)  where
 "at_ol (ListV xs) (IntV i) = (if (i \<ge> 0) then IntV (xs ! (nat i)) else undefined)" |
 "at_ol _ _ = undefined"
 
+(*
 instantiation int_and_list :: plus
 begin
 
@@ -7172,7 +7173,9 @@ fun plus_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> 
 instance ..
 
 end
+*)
 
+(*
 instantiation int_and_list :: ord
 begin
 
@@ -7186,17 +7189,67 @@ fun less_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> 
 
 instance ..
 
-end
+end*)
+(*
+instantiation int_and_list :: modulo
+begin
 
+fun modulo_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" where
+  "modulo_int_and_list (IntV i) (IntV j) = # (i mod j)"
+| "modulo_int_and_list _ _ = undefined"
+
+instance ..
+
+end
+*)
+(*
+instantiation int_and_list :: minus
+begin
+
+fun minus_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" where
+  "minus_int_and_list (#i) (#j) = #(i - j)"
+| "minus_int_and_list _ _ = undefined"
+
+instance ..
+
+end*)
+
+fun plus_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list"  (infixl "+\<^sub>o" 65) where
+  "plus_ol (IntV i) (IntV j) = IntV (i + j)"
+| "plus_ol _ _ = undefined"
+
+fun minus_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list"  (infixl "-\<^sub>o" 65) where
+  "minus_ol (IntV i) (IntV j) = IntV (i - j)"
+| "minus_ol _ _ = undefined"
+
+fun mod_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list"  (infixl "mod\<^sub>o" 65) where
+  "mod_ol (IntV i) (IntV j) = IntV (i mod j)"
+| "mod_ol _ _ = undefined"
+
+fun less_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool"  (infix "<\<^sub>o" 50) where
+  "(IntV i) <\<^sub>o (IntV j) = (i < j)"
+| "_ <\<^sub>o _ = undefined"
+
+fun gr_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool"  (infix ">\<^sub>o" 50) where
+  "(IntV i) >\<^sub>o (IntV j) = (i > j)"
+| "_ >\<^sub>o _ = undefined"
+
+fun lesseq_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool"  (infix "\<le>\<^sub>o" 50) where
+  "(IntV i) \<le>\<^sub>o (IntV j) = (i \<le> j)"
+| "_ \<le>\<^sub>o _ = undefined"
+
+fun greq_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool"  (infix "\<ge>\<^sub>o" 50) where
+  "(IntV i) \<ge>\<^sub>o (IntV j) = (i \<ge> j)"
+| "_ \<ge>\<^sub>o _ = undefined"
 
 abbreviation simple_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
 "simple_reduction s x i n \<equiv>
   x ::= (\<lambda>\<sigma>. #0);;
   i ::= (\<lambda>\<sigma>. #0);;
   n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
-  WHILE (\<lambda>\<sigma>. (\<sigma> i) < (\<sigma> n)) DO (
-    x ::= (\<lambda>\<sigma>. (\<sigma> x) + (\<sigma> s)[\<sigma> i]);;
-    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #1)
+  WHILE (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) DO (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
   )
 "
 
@@ -7210,19 +7263,20 @@ abbreviation sa_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarr
   x3 ::= (\<lambda>\<sigma>. #0);;
   i ::= (\<lambda>\<sigma>. #0);;
   n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
-  WHILE (\<lambda>\<sigma>. (\<sigma> i)+#3 < (\<sigma> n)) DO(
-    x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) + (\<sigma> s)[\<sigma> i]);;
-    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) + (\<sigma> s)[\<sigma> i+#1]);;
-    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) + (\<sigma> s)[\<sigma> i+#2]);;
-    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) + (\<sigma> s)[\<sigma> i+#3]);;
-    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #4)
+  WHILE (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)) DO(
+    x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #1));;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #2));;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #3));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #4)
   );;
-  x ::= (\<lambda>\<sigma>. (\<sigma> x0)+(\<sigma> x1)+(\<sigma> x2)+(\<sigma> x3));;
-  WHILE (\<lambda>\<sigma>. (\<sigma> i) < (\<sigma> n)) DO(
-    x ::= (\<lambda>\<sigma>. (\<sigma> x) + (\<sigma> s)[\<sigma> i]);;
-    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #1)
+  x ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> x1) +\<^sub>o (\<sigma> x2) +\<^sub>o (\<sigma> x3));;
+  WHILE (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) DO(
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
   )
 "
+
 
 
 (*The last conjunct in the precondition does not appear in the report and is purely technical:
@@ -7237,8 +7291,33 @@ proposition
               \<and> (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)))}  
             [[1 \<mapsto> simple_reduction s x i n, 2 \<mapsto> sa_reduction s x i n x0 x1 x2 x3]::int_and_list hyper_program] 
              {(\<lambda>S::int_and_list hyper_set. \<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>2 x) = (snd \<sigma>1 x))})"
-  sorry
-
+proof -
+  let ?Iv1 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s) \<and> (snd \<sigma>1 i) = (snd \<sigma>1' i)) \<and> 
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and> 
+                (\<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 n = len (snd \<sigma>1 s) \<and> snd \<sigma>1 i \<le>\<^sub>o snd \<sigma>1 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s) \<and> snd \<sigma>2 i \<le>\<^sub>o snd \<sigma>2 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #0 \<or> (snd \<sigma>1 i) <\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i)) \<and>
+                   ((((snd \<sigma>1 n) mod\<^sub>o #4) = #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #1) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #2 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o(snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #2) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #3 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #2)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #3) 
+                )
+              )"
+  let ?Iv2 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s) \<and> snd \<sigma>2 i \<le>\<^sub>o snd \<sigma>2 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and> (snd \<sigma>2 n) = (snd \<sigma>1 i) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #3 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #2))) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #2 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1))) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #1 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)))  \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #0 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x))
+                )  
+              )"
 
 
 
