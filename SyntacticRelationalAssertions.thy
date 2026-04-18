@@ -7144,4 +7144,124 @@ proof -
     qed
   qed
 qed
+
+
+section \<open>Large case study\<close>
+
+datatype int_and_list =
+  IntV int ("#_")
+| ListV "int list"
+
+subsection \<open>Fixed alignment rule\<close>
+
+fun len :: "int_and_list \<Rightarrow> int_and_list" where
+"len (ListV xs) = IntV (int(length xs))" |
+"len _ = undefined"
+
+fun at_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" ("_[_]" [1000, 0] 1000) where
+"at_ol (ListV xs) (IntV i) = (if (i \<ge> 0) then IntV (xs ! (nat i)) else undefined)" |
+"at_ol _ _ = undefined"
+
+instantiation int_and_list :: plus
+begin
+
+fun plus_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list" where
+  "plus_int_and_list (IntV i) (IntV j) = IntV (i + j)"
+| "plus_int_and_list _ _ = undefined"
+
+instance ..
+
+end
+
+instantiation int_and_list :: ord
+begin
+
+fun less_eq_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool" where
+  "less_eq_int_and_list (IntV i) (IntV j) = (i \<le> j)"
+| "less_eq_int_and_list _ _ = undefined"
+
+fun less_int_and_list :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> bool" where
+  "less_int_and_list (IntV i) (IntV j) = (i < j)"
+| "less_int_and_list _ _ = undefined"
+
+instance ..
+
+end
+
+
+abbreviation simple_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
+"simple_reduction s x i n \<equiv>
+  x ::= (\<lambda>\<sigma>. #0);;
+  i ::= (\<lambda>\<sigma>. #0);;
+  n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
+  WHILE (\<lambda>\<sigma>. (\<sigma> i) < (\<sigma> n)) DO (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) + (\<sigma> s)[\<sigma> i]);;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #1)
+  )
+"
+
+
+abbreviation sa_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
+"sa_reduction s x i n x0 x1 x2 x3 \<equiv> 
+  x ::= (\<lambda>\<sigma>. #0);;
+  x0 ::= (\<lambda>\<sigma>. #0);;
+  x1 ::= (\<lambda>\<sigma>. #0);;
+  x2 ::= (\<lambda>\<sigma>. #0);;
+  x3 ::= (\<lambda>\<sigma>. #0);;
+  i ::= (\<lambda>\<sigma>. #0);;
+  n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
+  WHILE (\<lambda>\<sigma>. (\<sigma> i)+#3 < (\<sigma> n)) DO(
+    x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) + (\<sigma> s)[\<sigma> i]);;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) + (\<sigma> s)[\<sigma> i+#1]);;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) + (\<sigma> s)[\<sigma> i+#2]);;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) + (\<sigma> s)[\<sigma> i+#3]);;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #4)
+  );;
+  x ::= (\<lambda>\<sigma>. (\<sigma> x0)+(\<sigma> x1)+(\<sigma> x2)+(\<sigma> x3));;
+  WHILE (\<lambda>\<sigma>. (\<sigma> i) < (\<sigma> n)) DO(
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) + (\<sigma> s)[\<sigma> i]);;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) + #1)
+  )
+"
+
+
+(*The last conjunct in the precondition does not appear in the report and is purely technical:
+  It is there to assure that s is of the correct type. The rest of the variables are directly initiated by the programs
+  and so we do not need to assume their types in the precondition.*)
+proposition
+  fixes s x i n x0 x1 x2 x3 :: nat
+  assumes vars_distinct : "distinct [s, x, i, n, x0, x1, x2, x3]"
+  shows "(\<Turnstile>  {(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2).(snd \<sigma>1 s) = (snd \<sigma>2 s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)))}  
+            [[1 \<mapsto> simple_reduction s x i n, 2 \<mapsto> sa_reduction s x i n x0 x1 x2 x3]::int_and_list hyper_program] 
+             {(\<lambda>S::int_and_list hyper_set. \<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>2 x) = (snd \<sigma>1 x))})"
+  sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+subsection \<open>Refinement rule\<close>
+
+
+subsection \<open>Nonfixed alignment rule\<close>
+
+
+subsubsection \<open>A more complex example\<close>
+
+
+subsection \<open>Exists-forall properties\<close>
+
 end
