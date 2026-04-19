@@ -7488,6 +7488,8 @@ proposition
             [[1 \<mapsto> simple_reduction s x i n, 2 \<mapsto> sa_reduction s x i n x0 x1 x2 x3]::int_and_list hyper_program] 
              {(\<lambda>S::int_and_list hyper_set. \<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>2 x) = (snd \<sigma>1 x))})"
 proof -
+  let ?bs = "(\<lambda>j. if (j=1) then (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) else (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)))"
+  let ?rf = "(\<lambda>j. if (j=1) then 4 else 1)"
   let ?P = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
               \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2).(snd \<sigma>1 s) = (snd \<sigma>2 s))
               \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s))
@@ -7506,7 +7508,10 @@ proof -
                       \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o(snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #2) \<and>
                   ((((snd \<sigma>1 n) mod\<^sub>o #4) = #3 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
                       \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #2)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #3) 
-                )
+                ) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))
               )"
   let ?Iv2 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
                 (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and>
@@ -7516,7 +7521,10 @@ proof -
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #2 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1))) \<and>
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #1 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)))  \<and>
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #0 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x))
-                )  
+                ) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))  
               )"
   let ?Cs = "[1 \<mapsto> simple_reduction s x i n, 2 \<mapsto> sa_reduction s x i n x0 x1 x2 x3]::int_and_list hyper_program"
   let ?Cs1 = "[i \<mapsto> ((\<lambda>i. (if (i = 1) then x else x0)) i) ::= ((\<lambda>i. (\<lambda>\<sigma>. #0)) i) | i \<in> {1,2}]::int_and_list hyper_program"
@@ -7541,14 +7549,49 @@ proof -
     x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
     i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
   )]::int_and_list hyper_program"
+  let ?CsL1 = "[j \<mapsto> WHILE (if (j=1) then (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) else (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n))) DO 
+  ( if (j =1) then (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
+  ) else 
+    (x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #1));;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #2));;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #3));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #4))
+  ) | j \<in> {1,2}]::int_and_list hyper_program"
+  let ?CsL2 = "[i \<mapsto> x ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> x1) +\<^sub>o (\<sigma> x2) +\<^sub>o (\<sigma> x3)) | i \<in> {2}]::int_and_list hyper_program"
+  let ?CsL3 = "[j \<mapsto> WHILE (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) DO(
+                  x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+                  i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
+                ) | j \<in> {2}]::int_and_list hyper_program"
   let ?P1 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 x = #0) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x0 = #0)"
   let ?P2.0 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x1 = #0)"
   let ?P2.1 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x2 = #0)"
   let ?P2.2 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x3 = #0)"
   let ?P3 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 i = #0) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 i = #0)"
   let ?P4 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 n = len (snd \<sigma>1 s)) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 n = len (snd \<sigma>2 s))"
-
-  have eq:"?Cs = ?Cs1 ;;\<^sub>H ?Cs2.0 ;;\<^sub>H ?Cs2.1 ;;\<^sub>H ?Cs2.2 ;;\<^sub>H ?Cs3 ;;\<^sub>H ?Cs4 ;;\<^sub>H ?CsL"
+  let ?PL2 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s) \<and> (snd \<sigma>1 i) = (snd \<sigma>1' i)) \<and> 
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and> 
+                (\<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 n = len (snd \<sigma>1 s) \<and> snd \<sigma>1 i \<le>\<^sub>o snd \<sigma>1 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s) \<and> snd \<sigma>2 i \<le>\<^sub>o snd \<sigma>2 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #0 \<or> (snd \<sigma>1 i) <\<^sub>o (snd \<sigma>1 n) \<or> (snd \<sigma>1 n) = #0) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i)) \<and>
+                   ((((snd \<sigma>1 n) mod\<^sub>o #4) = #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #1) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #2 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #2) \<and>
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #3 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
+                      \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #2)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #3) 
+                ) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i')) \<and>
+               (holds_forall_hyper {1,2} (lnot_hyper ?bs)) S
+              )"
+  have eq:"?Cs = ?Cs1 ;;\<^sub>H ?Cs2.0 ;;\<^sub>H ?Cs2.1 ;;\<^sub>H ?Cs2.2 ;;\<^sub>H ?Cs3 ;;\<^sub>H ?Cs4 ;;\<^sub>H ?CsL1 ;;\<^sub>H ?CsL2 ;;\<^sub>H ?CsL3"
     apply(rule)
     by(auto simp add:fun_upd_def hyper_seq_def map_add_def map_comprehension_def)
 
@@ -7761,14 +7804,152 @@ proof -
               using prems(3) apply(fastforce)
               using prems(8-12) apply(fastforce)
               using prems(13) prems(14) apply(fastforce)
-                   apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
-                  apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
-                 apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
-              apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
-              apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
-              apply(rule FalseE) using prems(13) prems(6) prems(15) apply(auto)[1] 
+              using prems(13) prems(6) prems(15) by(auto) 
+          qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(6) by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7) by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(15) prems(6) by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(16) prems(7) by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(14) by(fastforce) qed
+          apply(rule lockstep_seq[where ?R="conj ?Iv1 (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
+           (*apply(rule while_fixed_alignment2[where ?Q="?Iv1" and rf="?rf"])*)
+           prefer 2
+           apply(rule lockstep_seq[where ?R="?PL2"])
+            apply(rule precondition_conseq)
+             prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+               apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7)              
+              apply(intro ballI conjI impI)
+              subgoal premises prems2 proof - show ?thesis using prems2(1-3) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
+              done 
+          qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) assms by auto qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(14) assms unfolding holds_forall_hyper_def lnot_hyper_def by auto qed
+          apply(rule precondition_conseq[where ?P'="?Iv2"])
+          using assms
+          unfolding entails_def 
+           apply(intro allI impI conjI)
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+               apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(6) by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems for S proof - show ?thesis 
+              apply(intro ballI conjI impI)
+              subgoal premises prems2 proof - show ?thesis using prems2 prems(7) by auto qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
+                have "(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                  unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                moreover have "(snd \<sigma>1 i \<le>\<^sub>o snd \<sigma>1 n)" using prems(5) prems2 by(auto)
+                ultimately have "(snd \<sigma>1 i = snd \<sigma>1 n)" using prems(10) prems(12) prems2 by force
+                moreover have "(snd \<sigma>2 n = snd \<sigma>1 n)" by (metis prems(7) prems(5,6) prems2(1,2))
+                ultimately show ?thesis by auto
+              qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
+                have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
+                  using prems(10) prems2 by(auto) 
+                from prems(3) have "snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #3"
+                  using prems(12) prems(13) prems2 by fastforce
+                moreover have gr:"(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                  unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                ultimately have "\<not>((snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0))" using prems(7) prems2(1,2) prems(12) prems(13)
+                  by fastforce
+                with H have "(snd \<sigma>1 n mod\<^sub>o #4 = #3)" by auto
+                from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
+              qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
+                have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
+                  using prems(10) prems2 by(auto) 
+                from prems(3) have "snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #2"
+                  using prems(12) prems(13) prems2 by fastforce
+                moreover have gr:"(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                  unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                ultimately have "\<not>((snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0))" using prems(7) prems2(1,2) prems(12) prems(13)
+                  by fastforce
+                with H have "(snd \<sigma>1 n mod\<^sub>o #4 = #2)" by auto
+                from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
+              qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
+                have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
+                  using prems(10) prems2 by(auto) 
+                from prems(3) have "snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #1"
+                  using prems(12) prems(13) prems2 by fastforce
+                moreover have gr:"(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                  unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                ultimately have "\<not>((snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0))" using prems(7) prems2(1,2) prems(12) prems(13)
+                  by fastforce
+                with H have "(snd \<sigma>1 n mod\<^sub>o #4 = #1)" by auto
+                from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
+              qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
+                have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
+                  using prems(10) prems2 by(auto) 
+                from prems(3) have "snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #0"
+                  using prems(12) prems(13) prems2 by fastforce
+                moreover have gr:"(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                  unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                ultimately have "\<not>((snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1))" using prems(7) prems2(1,2) prems(12) prems(13)
+                  by fastforce
+                with H have "(snd \<sigma>1 n mod\<^sub>o #4 = #0)" by auto
+                from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
+              qed
               done
           qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) by(fastforce) qed
+               apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
 
 
 
