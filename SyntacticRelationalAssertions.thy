@@ -7522,6 +7522,7 @@ proof -
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #1 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)))  \<and>
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #0 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x))
                 ) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) \<le>\<^sub>o #3) \<and>
                 (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
                (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
                (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))  
@@ -7565,6 +7566,11 @@ proof -
                   x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
                   i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
                 ) | j \<in> {2}]::int_and_list hyper_program"
+  let ?CsL3_b = "[j \<mapsto>x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+                  i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1) | j \<in> {2}]::int_and_list hyper_program"
+  let ?CsL3_b1 = "[j \<mapsto> x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i)) | j \<in> {2}]::int_and_list hyper_program"
+  let ?CsL3_b2 = "[j \<mapsto> i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1) | j \<in> {2}]::int_and_list hyper_program"
+
   let ?P1 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 x = #0) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x0 = #0)"
   let ?P2.0 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x1 = #0)"
   let ?P2.1 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x2 = #0)"
@@ -7591,7 +7597,24 @@ proof -
                (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i')) \<and>
                (holds_forall_hyper {1,2} (lnot_hyper ?bs)) S
               )"
+  let ?PL3_b1 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s) \<and> snd \<sigma>2 i \<le>\<^sub>o snd \<sigma>2 n) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and> (snd \<sigma>2 n) = (snd \<sigma>1 i) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #3 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1)) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #2))) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #2 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i +\<^sub>o #1))) \<and>
+                  ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #1 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x))
+                ) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) \<le>\<^sub>o #3) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))  
+              )"
   have eq:"?Cs = ?Cs1 ;;\<^sub>H ?Cs2.0 ;;\<^sub>H ?Cs2.1 ;;\<^sub>H ?Cs2.2 ;;\<^sub>H ?Cs3 ;;\<^sub>H ?Cs4 ;;\<^sub>H ?CsL1 ;;\<^sub>H ?CsL2 ;;\<^sub>H ?CsL3"
+    apply(rule)
+    by(auto simp add:fun_upd_def hyper_seq_def map_add_def map_comprehension_def)
+
+  have eq2: "?CsL3_b = ?CsL3_b1 ;;\<^sub>H ?CsL3_b2"
     apply(rule)
     by(auto simp add:fun_upd_def hyper_seq_def map_add_def map_comprehension_def)
 
@@ -7868,9 +7891,10 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(14) assms unfolding holds_forall_hyper_def lnot_hyper_def by auto qed
-          apply(rule precondition_conseq[where ?P'="?Iv2"])
+          apply(rule precondition_conseq[where ?P'="conj ?Iv2 (low_exp_hyper {2} (\<lambda>j. (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n))))"])
           using assms
           unfolding entails_def 
+          apply(simp only:conj_def)
            apply(intro allI impI conjI)
                 apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
@@ -7941,6 +7965,8 @@ proof -
               done
           qed
              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7) prems(12) prems(13) prems(10) by(fastforce) qed
+             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(9) by(fastforce) qed
                apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(10) by(fastforce) qed
@@ -7950,6 +7976,137 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(12) by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems for S proof - show ?thesis using prems(4) prems(6) unfolding low_exp_hyper_def by (metis singleton_iff) qed
+           apply(rule postcondition_conseq)
+          prefer 2
+            apply(rule while_lockstep)
+            prefer 2
+          using assms
+          unfolding entails_def 
+          apply(simp only:conj_def disj_def)
+            apply(intro allI impI conjI)
+            apply(erule conjE)
+            apply(erule disjE)
+             apply(erule conjE)+
+          subgoal premises prems2 for S proof - 
+            have "\<forall>\<sigma>2\<in>S 2. snd \<sigma>2 i = snd \<sigma>2 n" using prems2(2) prems2(5) prems2(12) prems2(10)
+              unfolding holds_forall_hyper_def lnot_hyper_def by fastforce
+            from this have "\<forall>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S 1. snd \<sigma>1 i -\<^sub>o snd \<sigma>2 i = #0" using prems2(6) prems2(11) prems2(10) by auto
+            
+            from this show ?thesis using prems2(6) prems2(3) by auto
+          qed
+          subgoal premises prems2 for S proof - show ?thesis using prems2(3) unfolding hyper_emp_def by auto qed
+           apply(simp only:eq2)
+           apply(rule lockstep_seq[where ?R="conj ?PL3_b1 (holds_forall_hyper {2} (\<lambda>j \<sigma>. \<sigma> i <\<^sub>o \<sigma> n))"])
+            apply(rule precondition_conseq)
+          prefer 2
+             apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+          apply(simp only:conj_def disj_def)
+            apply(intro allI impI conjI)
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems for S proof - show ?thesis
+              apply(intro ballI conjI impI)
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              done
+            qed
+             apply(erule conjE)+
+            subgoal premises prems proof - show ?thesis using prems(7) assms prems(12) prems(11) by fastforce qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) assms unfolding holds_forall_hyper_def by(fastforce) qed
+           apply(rule precondition_conseq)
+            prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+          apply(simp only:conj_def disj_def)
+            apply(intro allI impI conjI)
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+                  apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) prems(2) prems(12) prems(10) assms unfolding holds_forall_hyper_def by fastforce qed
+            apply(erule conjE)+
+          subgoal premises prems for S proof - show ?thesis
+              apply(intro ballI conjI impI)             
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(6) prems2 assms by auto qed 
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof -
+                have "\<not>(snd \<sigma>1 i -\<^sub>o snd \<sigma>2 i = #3)" using prems(7) prems2 prems(11,12) by fastforce
+                with prems2 show ?thesis by auto
+              qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof -
+                from prems2 obtain \<sigma>2' where H:"\<sigma>2'\<in> S 2 \<and> \<sigma>2 = (fst \<sigma>2', (snd \<sigma>2')(i := (snd \<sigma>2') i +\<^sub>o #1))" by auto
+                from prems2 have H2:"\<sigma>1 \<in> (S 1)" by auto
+                have "snd \<sigma>1 i -\<^sub>o snd \<sigma>2' i = #3" using prems2 H prems(12) prems(11) by fastforce
+                with prems(6) H H2 have H3:"snd \<sigma>1 x = snd \<sigma>2' x +\<^sub>o snd \<sigma>2' s !\<^sub>o (snd \<sigma>2' i +\<^sub>o #1) +\<^sub>o snd \<sigma>2' s !\<^sub>o (snd \<sigma>2' i +\<^sub>o #2)" by blast
+                from H assms have e1:"snd \<sigma>2 x = snd \<sigma>2' x" by auto
+                from H assms have e2:"snd \<sigma>2 s = snd \<sigma>2' s" by auto
+                from H assms have e3:"snd \<sigma>2 i = snd \<sigma>2' i +\<^sub>o #1 "  by auto
+                show ?thesis  apply(auto simp add:e1 e2 e3) using H3 prems(12) H
+                  by (smt (verit, del_insts) add.commute dbl_def dbl_simps(3) group_cancel.add2 plus_ol.simps(1)) qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof -
+                from prems2 obtain \<sigma>2' where H:"\<sigma>2'\<in> S 2 \<and> \<sigma>2 = (fst \<sigma>2', (snd \<sigma>2')(i := (snd \<sigma>2') i +\<^sub>o #1))" by auto
+                from prems2 have H2:"\<sigma>1 \<in> (S 1)" by auto
+                have "snd \<sigma>1 i -\<^sub>o snd \<sigma>2' i = #2" using prems2 H prems(12) prems(11) by fastforce
+                with prems(6) H H2 have H3:"snd \<sigma>1 x = snd \<sigma>2' x +\<^sub>o snd \<sigma>2' s !\<^sub>o (snd \<sigma>2' i +\<^sub>o #1)" by blast
+                from H assms have e1:"snd \<sigma>2 x = snd \<sigma>2' x" by auto
+                from H assms have e2:"snd \<sigma>2 s = snd \<sigma>2' s" by auto
+                from H assms have e3:"snd \<sigma>2 i = snd \<sigma>2' i +\<^sub>o #1 "  by auto
+                show ?thesis  apply(auto simp add:e1 e2 e3) using H3 prems(12) H
+                  by (smt (verit, del_insts) add.commute dbl_def dbl_simps(3) group_cancel.add2 plus_ol.simps(1)) qed
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof -
+                from prems2 obtain \<sigma>2' where H:"\<sigma>2'\<in> S 2 \<and> \<sigma>2 = (fst \<sigma>2', (snd \<sigma>2')(i := (snd \<sigma>2') i +\<^sub>o #1))" by auto
+                from prems2 have H2:"\<sigma>1 \<in> (S 1)" by auto
+                have "snd \<sigma>1 i -\<^sub>o snd \<sigma>2' i = #1" using prems2 H prems(12) prems(11) by fastforce
+                with prems(6) H H2 have H3:"snd \<sigma>1 x = snd \<sigma>2' x" by blast
+                from H assms have e1:"snd \<sigma>2 x = snd \<sigma>2' x" by auto
+                from H assms have e2:"snd \<sigma>2 s = snd \<sigma>2' s" by auto
+                from H assms have e3:"snd \<sigma>2 i = snd \<sigma>2' i +\<^sub>o #1 "  by auto
+                show ?thesis  apply(auto simp add:e1 e2 e3) using H3 prems(12) H
+                  by (smt (verit, del_insts) add.commute dbl_def dbl_simps(3) group_cancel.add2 plus_ol.simps(1)) qed
+              done
+          qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7) assms prems(11,12) by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) assms prems(11) prems(9) prems(4,5) unfolding holds_forall_hyper_def low_exp_hyper_def
+              by (smt (verit, best) fun_upd_other fun_upd_same mem_Collect_eq prems(4,5) singleton_iff snd_eqD) qed
+          sorry
+      qed
 
 
 
