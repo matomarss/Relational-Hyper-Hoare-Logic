@@ -5598,6 +5598,169 @@ qed
 
 
 
+lemma if_then_trueE:
+  assumes "b \<sigma>" and "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  using assms
+  unfolding if_then_def lnot_def
+  by auto
+
+lemma if_then_falseE:
+  assumes "\<not> b \<sigma>" and "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  shows "\<sigma>' = \<sigma>"
+  using assms
+  unfolding if_then_def lnot_def
+  by auto
+
+lemma repeat_with_if_false:
+  assumes "\<not> b \<sigma>"
+  shows "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>"
+  using assms
+proof (induction r)
+  case 0
+  show ?case by (simp add: SemSkip)
+next
+  case (Suc r)
+  have "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<sigma>"
+    using Suc.prems
+    unfolding if_then_def lnot_def
+    by (meson SemAssume SemIf2)
+  moreover have "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>"
+    using Suc.IH Suc.prems by blast
+  ultimately show ?case
+    by (simp add: SemSeq)
+qed
+
+lemma repeat_with_if_false_only:
+  assumes "\<not> b \<sigma>" and "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  shows "\<sigma>' = \<sigma>"
+  using assms
+proof (induction r arbitrary: \<sigma>')
+  case 0
+  then show ?case by auto
+next
+  case (Suc r)
+  then obtain \<tau> where
+    H1: "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<tau>"
+    and H2: "\<langle>repeat_with_if r b C, \<tau>\<rangle> \<rightarrow> \<sigma>'"
+    by auto
+  from if_then_falseE[OF Suc.prems(1) H1] have "\<tau> = \<sigma>" .
+   show ?case
+    using H2 Suc.IH \<open>\<tau> = \<sigma>\<close> assms(1) by blast
+qed
+
+
+
+lemma if_repeat_id: "sem (if_then b (repeat_with_if r b C)) = sem (repeat_with_if r b C)"
+proof (rule ext)
+  fix S
+  show "sem (if_then b (repeat_with_if r b C)) S = sem (repeat_with_if r b C) S"
+  proof (auto simp: sem_def)
+    fix l \<sigma> \<sigma>'
+    assume HS: "(l, \<sigma>) \<in> S"
+       and H:  "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+    show "\<exists>\<sigma>0. (l, \<sigma>0) \<in> S \<and> \<langle>repeat_with_if r b C, \<sigma>0\<rangle> \<rightarrow> \<sigma>'"
+    proof (cases "b \<sigma>")
+      case True
+      from if_then_trueE[OF True H] have "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'" .
+      with HS show ?thesis by blast
+    next
+      case False
+      from if_then_falseE[OF False H] have "\<sigma>' = \<sigma>" .
+      moreover from repeat_with_if_false
+      have "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>" 
+        using False by blast
+      ultimately show ?thesis using HS by blast
+    qed
+  next
+    fix l \<sigma> \<sigma>'
+    assume HS: "(l, \<sigma>) \<in> S"
+       and H:  "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+    show "\<exists>\<sigma>0. (l, \<sigma>0) \<in> S \<and> \<langle>if_then b (repeat_with_if r b C), \<sigma>0\<rangle> \<rightarrow> \<sigma>'"
+    proof (cases "b \<sigma>")
+      case True
+      have "\<langle>Assume b ;; repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        using True H by (meson SemAssume SemSeq)
+      hence "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        unfolding if_then_def by (rule SemIf1)
+      with HS show ?thesis by blast
+    next
+      case False
+      from repeat_with_if_false_only[OF False H] have "\<sigma>' = \<sigma>" .
+      hence "\<langle>Assume (lnot b), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        using False unfolding lnot_def by (auto intro: SemAssume)
+      hence "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        unfolding if_then_def by (rule SemIf2)
+      with HS show ?thesis by blast
+    qed
+  qed
+qed
+
+
+theorem while_fixed_alignment2:
+  assumes "\<Turnstile> { Iv } [[i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I]] { Iv }" 
+    and   "(\<forall>i\<in>I. (rf i) > 0)"
+    and   "\<Turnstile> { Iv } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
+    and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
+    and   "I \<noteq> {}"
+    shows "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+proof -
+  let ?V = "\<lambda>J. if J = I then (\<lambda>S. True) else (\<lambda>S. False)"
+  let ?Iv2 = "\<lambda>n. Iv"
+  let ?Cs2 = "\<lambda>i. repeat_with_if (rf i) (bs i) (Cs i)"
+  have "\<And>S. sem_lifted [i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I] S = sem_lifted [i \<mapsto> if_then (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I] S"
+    apply(rule)
+    apply(auto simp add:sem_lifted_def map_comprehension_def) using if_repeat_id assms(2)
+     apply metis
+    by (simp add: assms(2) if_repeat_id)
+  with assms(1) have H:"\<Turnstile> { Iv } [[i \<mapsto> if_then (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I]] { Iv }"
+    by (meson rewrite_rule sem_equiv_hyper_def)
+  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
+  proof (intro allI ballI)
+    fix n J
+    assume "J \<in> Pow I - {{}}"
+    hence "J = I \<or> J \<noteq> I" by auto
+    thus "\<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
+    proof 
+      assume asm:"J = I"
+      show ?thesis 
+        apply(simp only:asm)
+        using H 
+        using entail_conj_weaken precondition_conseq by blast
+    next
+      assume asm:"J \<noteq> I"
+      show ?thesis using asm 
+        by (simp add: conj_def relational_hyper_hoare_triple_def)
+    qed
+  qed
+  moreover have "\<forall>n::nat. entails (?Iv2 n) (all_unfinished_can_be_stepped_after2 n ?Iv2 I bs ?V)" 
+    apply(intro allI entailsI ballI conjI impI entailsI)
+  proof 
+    fix n::nat
+    fix S i
+    assume asm:"i \<in> I"
+    show "n \<le> n  \<and>
+            entails Iv (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> (if J = I then \<lambda>S. True else (\<lambda>S. False)) S))"
+      apply(auto)
+      apply(intro entailsI) using asm by auto
+  qed
+  moreover have "\<forall>n::nat. entails (?Iv2 n) (can_step_subset_or_all_finished2 I bs ?V)" 
+    apply(intro allI entailsI)
+    by(auto simp add:disj_def disj_I_def holds_forall_hyper_def)
+  ultimately have "\<Turnstile> { (?Iv2 0) } [[ i \<mapsto> (while_cond (bs i) (?Cs2 i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+    using while_nonfixed_alignment6[of I ?Iv2 ?V bs ?Cs2 Q Q_inf] assms(3) assms(4) assms(5) 
+    by blast
+  with while_unfolded[of I rf bs Cs] assms(2) 
+  show "\<Turnstile> { Iv } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
+    apply(intro relational_hyper_hoare_tripleI)
+    using relational_hyper_hoare_tripleE by fastforce
+qed
+
+
+
+
+
+
 section \<open>Single sem usage simplification rules\<close>
 
 lemma single_sem_eq_fin:
@@ -6664,6 +6827,21 @@ proof -
   with equiv rewrite_rule show ?thesis by auto
 qed
 
+
+theorem disjunction_rule:
+  assumes "\<Turnstile> {P1} [Cs] {Q1}"
+      and "\<Turnstile> {P2} [Cs] {Q2}"
+    shows "\<Turnstile> {disj P1 P2} [Cs] {disj Q1 Q2}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "disj P1 P2 S"
+  with assms have "Q1 (sem_lifted Cs S) \<or> Q2 (sem_lifted Cs S)"
+    unfolding disj_def relational_hyper_hoare_triple_def by auto
+  thus "disj Q1 Q2 (sem_lifted Cs S)" unfolding disj_def by auto
+qed
+
+
+
 section \<open>Mini case study\<close>
 
 
@@ -7256,7 +7434,6 @@ abbreviation simple_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Righ
 
 abbreviation sa_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
 "sa_reduction s x i n x0 x1 x2 x3 \<equiv> 
-  x ::= (\<lambda>\<sigma>. #0);;
   x0 ::= (\<lambda>\<sigma>. #0);;
   x1 ::= (\<lambda>\<sigma>. #0);;
   x2 ::= (\<lambda>\<sigma>. #0);;
@@ -7282,7 +7459,7 @@ abbreviation sa_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarr
 (*The last conjunct in the precondition does not appear in the report and is purely technical:
   It is there to assure that s is of the correct type. The rest of the variables are directly initiated by the programs
   and so we do not need to assume their types in the precondition.*)
-proposition
+(*proposition
   fixes s x i n x0 x1 x2 x3 :: nat
   assumes vars_distinct : "distinct [s, x, i, n, x0, x1, x2, x3]"
   shows "(\<Turnstile>  {(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
@@ -7298,7 +7475,7 @@ proof -
                 (\<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 n = len (snd \<sigma>1 s) \<and> snd \<sigma>1 i \<le>\<^sub>o snd \<sigma>1 n) \<and>
                 (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s) \<and> snd \<sigma>2 i \<le>\<^sub>o snd \<sigma>2 n) \<and>
                 (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and>
-                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #0 \<or> (snd \<sigma>1 i) <\<^sub>o (snd \<sigma>1 n)) 
+                  ((((snd \<sigma>1 n) mod\<^sub>o #4) = #0 \<or> (snd \<sigma>1 i) <\<^sub>o (snd \<sigma>1 n) \<or> (snd \<sigma>1 n) = #0) 
                       \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i)) \<and>
                    ((((snd \<sigma>1 n) mod\<^sub>o #4) = #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o (snd \<sigma>1 n)) 
                       \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) +\<^sub>o ((snd \<sigma>2 s)!\<^sub>o(snd \<sigma>2 i)) \<and> (snd \<sigma>1 i) = (snd \<sigma>2 i) +\<^sub>o #1) \<and>
@@ -7318,7 +7495,7 @@ proof -
                   ((snd \<sigma>1 i) -\<^sub>o (snd \<sigma>2 i) = #0 \<longrightarrow> (snd \<sigma>1 x) = (snd \<sigma>2 x))
                 )  
               )"
-
+*)
 
 
 
