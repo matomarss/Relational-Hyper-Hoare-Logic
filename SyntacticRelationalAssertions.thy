@@ -7332,6 +7332,8 @@ datatype int_and_list =
 
 subsection \<open>Fixed alignment rule\<close>
 
+subsubsection \<open>Preliminaries\<close>
+
 fun len :: "int_and_list \<Rightarrow> int_and_list" where
 "len (ListV xs) = IntV (int(length xs))" |
 "len _ = undefined"
@@ -7438,6 +7440,323 @@ lemma mod_eq:
 
 lemma len_int: shows "\<exists>n. len (ListV xs) = #n"
   by auto*)
+
+
+
+
+fun intval :: "int_and_list \<Rightarrow> int" where
+  "intval (IntV i) = i"
+| "intval _ = undefined"
+
+
+
+
+
+text \<open>Addition lemmas\<close>
+
+
+lemma plus_ol_assoc_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  shows "(i +\<^sub>o  j) +\<^sub>o  k =  i +\<^sub>o ( j +\<^sub>o  k)"
+  using assms(1,2,3) by force
+
+lemma plus_ol_comm_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i +\<^sub>o j = j +\<^sub>o i"
+  using assms by force
+
+lemma plus_ol_left_comm_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  shows "i +\<^sub>o (j +\<^sub>o k) = j +\<^sub>o (i +\<^sub>o k)"
+  using assms by force
+
+lemma plus_ol_zero_left_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "#0 +\<^sub>o i = i"
+  using assms by force
+
+lemma plus_ol_zero_right_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "i +\<^sub>o #0 = i"
+  using assms by force
+
+lemma plus_ol_IntV_closed:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "\<exists>k. i +\<^sub>o j = #k"
+  using assms by force
+
+
+text \<open>Subtraction lemmas\<close>
+
+lemma minus_ol_zero_right_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "i -\<^sub>o #0 = i"
+  using assms by force
+
+lemma minus_ol_self_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "i -\<^sub>o i = #0"
+  using assms by force
+
+lemma plus_minus_cancel_IntV [simp]:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "(i +\<^sub>o j) -\<^sub>o j = i"
+  using assms by force
+
+lemma minus_plus_cancel_IntV [simp]:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "(i -\<^sub>o j) +\<^sub>o j = i"
+  using assms by force
+
+
+text \<open>Modulo lemmas\<close>
+
+lemma mod_ol_by_1_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "i mod\<^sub>o #1 = #0"
+  using assms by force
+
+
+text \<open>Order lemmas\<close>
+
+lemma not_less_ol_self_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "\<not> (i <\<^sub>o i)"
+  using assms by force
+
+lemma le_ol_refl_IntV [simp]:
+  assumes "\<exists>i'. i = #i'"
+  shows "i \<le>\<^sub>o i"
+  using assms by force
+
+lemma less_ol_trans_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j" and "j <\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma le_less_ol_trans_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j" and "j <\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma less_le_ol_trans_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j" and "j \<le>\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma less_ol_not_sym_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i <\<^sub>o j"
+  shows "\<not> (j <\<^sub>o i)"
+  using assms by force
+
+lemma less_ol_imp_neq_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i <\<^sub>o j"
+  shows "i \<noteq> j"
+  using assms by force
+
+lemma less_ol_plus_right_mono_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j"
+  shows "i +\<^sub>o k <\<^sub>o j +\<^sub>o k"
+  using assms by force
+
+lemma le_ol_plus_right_mono_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j"
+  shows "i +\<^sub>o k \<le>\<^sub>o j +\<^sub>o k"
+  using assms by force
+
+
+text \<open>Length lemmas\<close>
+
+lemma length_ol_Nil [simp]:
+  assumes "\<exists>xs. l = ListV xs"
+  assumes "l = ListV []"
+  shows "len l = #0"
+  using assms by force
+
+
+
+
+
+text \<open>Bridge lemmas back to standard operations\<close>
+
+lemma IntV_plus_bridge:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "#(intval i + intval j) = i +\<^sub>o j"
+  using assms by force
+
+lemma IntV_minus_bridge:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "#(intval i - intval j) = i -\<^sub>o j"
+  using assms by force
+
+lemma IntV_mod_bridge:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "#(intval i mod intval j) = i mod\<^sub>o j"
+  using assms by force
+
+
+text \<open>Interaction lemmas for order\<close>
+
+lemma less_ol_imp_le_ol_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i <\<^sub>o j"
+  shows "i \<le>\<^sub>o j"
+  using assms by force
+
+lemma less_ol_or_eq_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i \<le>\<^sub>o j"
+  shows "i <\<^sub>o j \<or> i = j"
+  using assms by force
+
+lemma le_ol_iff_less_or_eq_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i \<le>\<^sub>o j \<longleftrightarrow> i <\<^sub>o j \<or> i = j"
+  using assms by force
+
+lemma less_ol_iff_le_ol_not_eq_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i <\<^sub>o j \<longleftrightarrow> i \<le>\<^sub>o j \<and> i \<noteq> j"
+  using assms by force
+
+lemma less_ol_iff_not_le_ol_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i <\<^sub>o j \<longleftrightarrow> \<not> (j \<le>\<^sub>o i)"
+  using assms by force
+
+lemma le_ol_iff_not_less_ol_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i \<le>\<^sub>o j \<longleftrightarrow> \<not> (j <\<^sub>o i)"
+  using assms by force
+
+lemma not_less_ol_iff_le_ol_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "\<not> (i <\<^sub>o j) \<longleftrightarrow> j \<le>\<^sub>o i"
+  using assms by force
+
+lemma not_le_ol_iff_less_ol_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "\<not> (i \<le>\<^sub>o j) \<longleftrightarrow> j <\<^sub>o i"
+  using assms by force
+
+lemma less_ol_trans_IntV':
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j" and "j <\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma le_ol_trans_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j" and "j \<le>\<^sub>o k"
+  shows "i \<le>\<^sub>o k"
+  using assms by force
+
+lemma less_le_ol_trans_IntV':
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j" and "j \<le>\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma le_less_ol_trans_IntV':
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j" and "j <\<^sub>o k"
+  shows "i <\<^sub>o k"
+  using assms by force
+
+lemma le_ol_antisym_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i \<le>\<^sub>o j" and "j \<le>\<^sub>o i"
+  shows "i = j"
+  using assms by force
+
+lemma less_ol_asym_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i <\<^sub>o j"
+  shows "\<not> (j <\<^sub>o i)"
+  using assms by force
+
+lemma less_ol_imp_neq_IntV':
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  assumes "i <\<^sub>o j"
+  shows "i \<noteq> j"
+  using assms by force
+
+lemma eq_or_less_ol_or_greater_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i = j \<or> i <\<^sub>o j \<or> j <\<^sub>o i"
+  using assms by force
+
+lemma le_ol_cases_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i \<le>\<^sub>o j \<or> j \<le>\<^sub>o i"
+  using assms by force
+
+lemma less_ol_cases_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'"
+  shows "i <\<^sub>o j \<or> i = j \<or> j <\<^sub>o i"
+  using assms by force
+
+text \<open>Monotonicity lemmas\<close>
+
+lemma plus_ol_strict_mono_right_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j"
+  shows "i +\<^sub>o k <\<^sub>o j +\<^sub>o k"
+  using assms by force
+
+lemma plus_ol_strict_mono_left_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j"
+  shows "k +\<^sub>o i <\<^sub>o k +\<^sub>o j"
+  using assms by force
+
+lemma plus_ol_mono_right_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j"
+  shows "i +\<^sub>o k \<le>\<^sub>o j +\<^sub>o k"
+  using assms by force
+
+lemma plus_ol_mono_left_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j"
+  shows "k +\<^sub>o i \<le>\<^sub>o k +\<^sub>o j"
+  using assms by force
+
+lemma minus_ol_mono_right_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i \<le>\<^sub>o j"
+  shows "i -\<^sub>o k \<le>\<^sub>o j -\<^sub>o k"
+  using assms by force
+
+lemma minus_ol_less_right_IntV:
+  assumes "\<exists>i'. i = #i'" and "\<exists>j'. j = #j'" and "\<exists>k'. k = #k'"
+  assumes "i <\<^sub>o j"
+  shows "i -\<^sub>o k <\<^sub>o j -\<^sub>o k"
+  using assms by force
+
+
+named_theorems ol_simps
+
+declare
+  less_ol_iff_le_ol_not_eq_IntV[ol_simps]
+  le_ol_iff_less_or_eq_IntV[ol_simps]
+  less_ol_iff_not_le_ol_IntV[ol_simps]
+  le_ol_iff_not_less_ol_IntV[ol_simps]
+  not_less_ol_iff_le_ol_IntV[ol_simps]
+  not_le_ol_iff_less_ol_IntV[ol_simps]
+
+
+
+
+
+subsubsection \<open>The example\<close>
 
 abbreviation simple_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
 "simple_reduction s x i n \<equiv>
@@ -7822,12 +8141,8 @@ proof -
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(16) prems(14) prems(7) by(auto) qed
             apply(erule conjE)+
-          subgoal premises prems proof - show ?thesis 
-              apply(intro ballI conjI impI) 
-              using prems(3) apply(fastforce)
-              using prems(8-12) apply(fastforce)
-              using prems(13) prems(14) apply(fastforce)
-              using prems(13) prems(6) prems(15) by(auto) 
+          subgoal premises prems proof - show ?thesis
+              using prems(3) prems(8-12) prems(13) prems(14) prems(13) prems(6) prems(15) by(auto)
           qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(6) by(fastforce) qed
@@ -7842,7 +8157,6 @@ proof -
            apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(14) by(fastforce) qed
           apply(rule lockstep_seq[where ?R="conj ?Iv1 (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
-           (*apply(rule while_fixed_alignment2[where ?Q="?Iv1" and rf="?rf"])*)
            prefer 2
            apply(rule lockstep_seq[where ?R="?PL2"])
             apply(rule precondition_conseq)
@@ -7864,7 +8178,7 @@ proof -
               apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
               apply(erule conjE)+
-          subgoal premises prems proof - show ?thesis using prems(7)              
+          subgoal premises prems proof - show ?thesis using prems(7)         
               apply(intro ballI conjI impI)
               subgoal premises prems2 proof - show ?thesis using prems2(1-3) assms by auto qed
               subgoal premises prems2 proof - show ?thesis using prems2(1-4) assms by auto qed
@@ -7906,13 +8220,14 @@ proof -
           subgoal premises prems for S proof - show ?thesis 
               apply(intro ballI conjI impI)
               subgoal premises prems2 proof - show ?thesis using prems2 prems(7) by auto qed
-              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
-                have "(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+              subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - show ?thesis using prems(14) prems2 prems(10) prems(12) prems(5) prems(6) prems(7) 
+                  unfolding holds_forall_hyper_def lnot_hyper_def by (smt (verit, best) insertCI less_ol_or_eq_IntV)
+                (*have "(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
                   unfolding holds_forall_hyper_def lnot_hyper_def by(force)
                 moreover have "(snd \<sigma>1 i \<le>\<^sub>o snd \<sigma>1 n)" using prems(5) prems2 by(auto)
                 ultimately have "(snd \<sigma>1 i = snd \<sigma>1 n)" using prems(10) prems(12) prems2 by force
                 moreover have "(snd \<sigma>2 n = snd \<sigma>1 n)" by (metis prems(7) prems(5,6) prems2(1,2))
-                ultimately show ?thesis by auto
+                ultimately show ?thesis by auto*)
               qed
               subgoal premises prems2 for \<sigma>2 \<sigma>1 proof - 
                 have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
@@ -8091,7 +8406,7 @@ proof -
               done
           qed
               apply(erule conjE)+
-          subgoal premises prems proof - show ?thesis using prems(7) assms prems(11,12) by(fastforce) qed
+          subgoal premises prems proof - show ?thesis using prems(7) assms prems(11,12)  by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
              apply(erule conjE)+
@@ -8105,8 +8420,135 @@ proof -
              apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(2) assms prems(11) prems(9) prems(4,5) unfolding holds_forall_hyper_def low_exp_hyper_def
               by (smt (verit, best) fun_upd_other fun_upd_same mem_Collect_eq prems(4,5) singleton_iff snd_eqD) qed
-          sorry
-      qed
+          apply(rule while_fixed_alignment2[where ?Q="?Iv1" and rf="?rf"])
+              prefer 2
+              apply(simp)
+             prefer 3
+          unfolding relational_upwards_closed_def hyper_union_def hyper_ascending_def hyper_set_le_def
+            apply(intro allI impI conjI)
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) prems(1)  apply(auto)  by meson qed
+                       apply(erule conjE)+
+          subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                   apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using prems(2) prems(1) 
+                  by (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv) 
+              qed
+                          apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                   apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using prems(2) prems(1) 
+                  by (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv) 
+              qed
+                         apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                   apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using prems(2) prems(1) 
+                  by (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv) 
+              qed
+                         apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1)
+                  apply (metis snd_conv)
+                  using prems(2) prems(1) 
+                  by (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv) 
+              qed
+                       apply(erule conjE)+
+              subgoal premises prems for Ss proof -
+                have H: "\<forall>na. (\<forall>\<sigma>2\<in>Ss na 2.
+                    \<forall>\<sigma>1\<in>Ss na 1. ((snd \<sigma>1 n mod\<^sub>o #4 = #0 \<or> snd \<sigma>1 i <\<^sub>o snd \<sigma>1 n \<or> snd \<sigma>1 n = #0) \<longrightarrow>
+                        snd \<sigma>1 x = snd \<sigma>2 x0 +\<^sub>o snd \<sigma>2 x1 +\<^sub>o snd \<sigma>2 x2 +\<^sub>o snd \<sigma>2 x3 \<and> snd \<sigma>1 i = snd \<sigma>2 i))"
+                  using prems(2) by blast
+                have H1: "\<forall>na. (\<forall>\<sigma>2\<in>Ss na 2.
+                    \<forall>\<sigma>1\<in>Ss na 1. (((snd \<sigma>1 n mod\<^sub>o #4 = #1 \<and> snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n) \<longrightarrow>
+                        snd \<sigma>1 x = snd \<sigma>2 x0 +\<^sub>o snd \<sigma>2 x1 +\<^sub>o snd \<sigma>2 x2 +\<^sub>o snd \<sigma>2 x3 +\<^sub>o snd \<sigma>2 s !\<^sub>o snd \<sigma>2 i \<and>
+                        snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #1)))"
+                  using prems(2) by blast
+                have H2: "\<forall>na. (\<forall>\<sigma>2\<in>Ss na 2.
+                    \<forall>\<sigma>1\<in>Ss na 1. ((((snd \<sigma>1 n mod\<^sub>o #4 = #2 \<and> snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n) \<longrightarrow>
+               snd \<sigma>1 x =
+               snd \<sigma>2 x0 +\<^sub>o snd \<sigma>2 x1 +\<^sub>o snd \<sigma>2 x2 +\<^sub>o snd \<sigma>2 x3 +\<^sub>o snd \<sigma>2 s !\<^sub>o snd \<sigma>2 i +\<^sub>o
+               snd \<sigma>2 s !\<^sub>o (snd \<sigma>2 i +\<^sub>o #1) \<and>
+               snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #2))))"
+                  using prems(2) by blast
+                have H3: "\<forall>na. (\<forall>\<sigma>2\<in>Ss na 2.
+                    \<forall>\<sigma>1\<in>Ss na 1. (((((snd \<sigma>1 n mod\<^sub>o #4 = #3 \<and> snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n) \<longrightarrow>
+               snd \<sigma>1 x =
+               snd \<sigma>2 x0 +\<^sub>o snd \<sigma>2 x1 +\<^sub>o snd \<sigma>2 x2 +\<^sub>o snd \<sigma>2 x3 +\<^sub>o snd \<sigma>2 s !\<^sub>o snd \<sigma>2 i +\<^sub>o
+               snd \<sigma>2 s !\<^sub>o (snd \<sigma>2 i +\<^sub>o #1) +\<^sub>o
+               snd \<sigma>2 s !\<^sub>o (snd \<sigma>2 i +\<^sub>o #2) \<and>
+               snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #3)))))"
+                  using prems(2) by blast
+                show ?thesis apply(auto) 
+                  using prems(2) prems(1) apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                             apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                            apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                           apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                          apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                         apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H prems(1) apply(auto)[1] 
+                        apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  using H1 prems(1) apply(auto)[1] using H1 prems(1)
+                 apply (smt (verit, ccfv_threshold) One_nat_def nle_le snd_eqD subset_iff)
+                 using H1 prems(1) apply(auto)[1] using H1 prems(1)
+                     apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                 using H2 prems(1) apply(auto)[1] using H2 prems(1)
+                 apply (smt (verit, ccfv_threshold) One_nat_def nle_le snd_eqD subset_iff)
+                 using H2 prems(1) apply(auto)[1] using H2 prems(1)
+                   apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                 using prems(1) apply(auto)[1] using H3 prems(1)
+                 apply (smt (verit, ccfv_threshold) One_nat_def nle_le snd_eqD subset_iff)
+                 using H3 prems(1) apply(auto)[1] using H3 prems(1)
+                 apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                 done
+             qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                     apply(erule conjE)+
+              subgoal premises prems for Ss proof - show ?thesis apply(auto) 
+                  using prems(2) prems(1) 
+                  apply (metis One_nat_def insert_absorb insert_subset nat_le_linear snd_conv)
+                  done
+              qed
+                prefer 3
+              apply(simp)
+                             
 
 
 
