@@ -8182,9 +8182,74 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(16) assms by(fastforce) qed
            apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(17) assms by(fastforce) qed
-
-
-
+          apply(rule precondition_conseq)
+           prefer 2
+           apply(rule postcondition_conseq)
+           prefer 2
+            apply(rule while_fixed_alignment[where Iv="?Iv" and rf="?rf"])
+             prefer 2
+             apply(simp)
+            prefer 2
+          unfolding entails_def
+           apply(simp only:conj_def disj_def)
+            apply(simp only: conj_assoc)
+           apply(intro allI impI)
+                          apply(erule conjE)+
+          subgoal premises prems proof - from prems(1) show ?thesis 
+              apply(rule) 
+              subgoal premises prems2 proof - from prems2 prems(2) show ?thesis by fastforce qed
+              using prems(2) unfolding hyper_emp_def by fastforce
+          qed
+          prefer 2
+           apply(simp only:conj_def)
+            apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                          apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(1) by(fastforce) qed
+                         apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                        apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                       apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+                      apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+                     apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+                  apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+                 apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+               apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(14) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(15) assms by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(16) assms by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis unfolding low_exp_hyper_def 
+              apply(intro ballI allI impI)
+              apply(auto)
+              using prems(2) prems(8) apply (metis One_nat_def snd_conv)
+              using prems(2) prems(8) apply (metis One_nat_def snd_conv)
+              using prems(10) prems(8,9) prems(13,14,15,16) prems(6) prems(4) apply fastforce
+              using prems(10) prems(8,9) prems(13,14,15,16) prems(6) prems(4) apply fastforce
+              using prems(10) prems(8,9) prems(13,14,15,16) prems(6) prems(4) apply fastforce
+              using prems(10) prems(8,9) prems(13,14,15,16) prems(6) prems(4) apply fastforce
+              using prems(3) prems(9) apply (metis snd_conv)
+              using prems(3) prems(9) apply (metis snd_conv)
+              done
+            qed
 
 
 
