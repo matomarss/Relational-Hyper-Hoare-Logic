@@ -7399,6 +7399,10 @@ fun plus_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_li
   "plus_ol (IntV i) (IntV j) = IntV (i + j)"
 | "plus_ol _ _ = undefined"
 
+fun times_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list"  (infixl "*\<^sub>o" 65) where
+  "times_ol (IntV i) (IntV j) = IntV (i * j)"
+| "times_ol _ _ = undefined"
+
 fun minus_ol :: "int_and_list \<Rightarrow> int_and_list \<Rightarrow> int_and_list"  (infixl "-\<^sub>o" 65) where
   "minus_ol (IntV i) (IntV j) = IntV (i - j)"
 | "minus_ol _ _ = undefined"
@@ -7753,10 +7757,439 @@ declare
   not_le_ol_iff_less_ol_IntV[ol_simps]
 
 
+subsubsection \<open>The simpler example\<close>
+
+abbreviation simple_reduction2 :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
+"simple_reduction2 s x i n \<equiv>
+  x ::= (\<lambda>\<sigma>. #0);;
+  i ::= (\<lambda>\<sigma>. #0);;
+  n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
+  WHILE (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) DO (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
+  )
+"
+
+
+abbreviation sa_reduction2 :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
+"sa_reduction2 s x i n x0 x1 x2 x3 \<equiv> 
+  x0 ::= (\<lambda>\<sigma>. #0);;
+  x1 ::= (\<lambda>\<sigma>. #0);;
+  x2 ::= (\<lambda>\<sigma>. #0);;
+  x3 ::= (\<lambda>\<sigma>. #0);;
+  i ::= (\<lambda>\<sigma>. #0);;
+  n ::= (\<lambda>\<sigma>. len (\<sigma> s));;
+  WHILE (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)) DO(
+    x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #1));;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #2));;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #3));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #4)
+  );;
+  x ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> x1) +\<^sub>o (\<sigma> x2) +\<^sub>o (\<sigma> x3))
+"
+
+
+proposition
+  fixes s x i n x0 x1 x2 x3 :: nat
+  assumes vars_distinct : "distinct [s, x, i, n, x0, x1, x2, x3]"
+  shows "(\<Turnstile>  {(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2).(snd \<sigma>1 s) = (snd \<sigma>2 s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). len (snd \<sigma>1 s) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). len (snd \<sigma>2 s) mod\<^sub>o #4 = #0)
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)))}  
+            [[1 \<mapsto> simple_reduction2 s x i n, 2 \<mapsto> sa_reduction2 s x i n x0 x1 x2 x3]::int_and_list hyper_program] 
+             {(\<lambda>S::int_and_list hyper_set. \<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>2 x) = (snd \<sigma>1 x))})"
+proof -
+  let ?bs = "(\<lambda>j. if (j=1) then (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) else (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)))"
+  let ?rf = "(\<lambda>j. if (j=1) then 4 else 1)"
+  let ?P = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2).(snd \<sigma>1 s) = (snd \<sigma>2 s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s))
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). len (snd \<sigma>1 s) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). len (snd \<sigma>2 s) mod\<^sub>o #4 = #0)
+              \<and> (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)))"
+  let ?Iv = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s) \<and> (snd \<sigma>1 i) = (snd \<sigma>1' i)) \<and> 
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and> 
+                (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 n) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>2 n) mod\<^sub>o #4 = #0) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 i) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>2 i) mod\<^sub>o #4 = #0) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 n = len (snd \<sigma>1 s)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). 
+                  (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and>
+                  (snd \<sigma>1 x) = (snd \<sigma>2 x0) +\<^sub>o (snd \<sigma>2 x1) +\<^sub>o (snd \<sigma>2 x2) +\<^sub>o (snd \<sigma>2 x3) \<and> 
+                  (snd \<sigma>1 i) = (snd \<sigma>2 i)
+                ) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))
+              )"
+
+  let ?Cs = "[1 \<mapsto> simple_reduction2 s x i n, 2 \<mapsto> sa_reduction2 s x i n x0 x1 x2 x3]::int_and_list hyper_program"
+  let ?Cs1 = "[i \<mapsto> ((\<lambda>i. (if (i = 1) then x else x0)) i) ::= ((\<lambda>i. (\<lambda>\<sigma>. #0)) i) | i \<in> {1,2}]::int_and_list hyper_program"
+  let ?Cs2.0 = "[i \<mapsto> x1 ::= (\<lambda>\<sigma>. #0) | i\<in>{2}]::int_and_list hyper_program"
+  let ?Cs2.1 = "[i \<mapsto> x2 ::= (\<lambda>\<sigma>. #0) | i\<in>{2}]::int_and_list hyper_program"
+  let ?Cs2.2 = "[i \<mapsto> x3 ::= (\<lambda>\<sigma>. #0) | i\<in>{2}]::int_and_list hyper_program"
+  let ?Cs3 = "[j \<mapsto> i ::= (\<lambda>\<sigma>. #0)|j\<in>{1,2}]::int_and_list hyper_program"
+  let ?Cs4 = "[i \<mapsto> n ::= (\<lambda>\<sigma>. len (\<sigma> s)) | i \<in> {1,2}]::int_and_list hyper_program"
+  let ?CsL = "[1 \<mapsto> WHILE (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) DO (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
+  ),
+  2 \<mapsto> WHILE (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)) DO(
+    x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #1));;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #2));;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #3));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #4)
+  );;
+  x ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> x1) +\<^sub>o (\<sigma> x2) +\<^sub>o (\<sigma> x3))]::int_and_list hyper_program"
+  let ?CsL1 = "[j \<mapsto> WHILE (if (j=1) then (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) else (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n))) DO 
+  ( if (j =1) then (
+    x ::= (\<lambda>\<sigma>. (\<sigma> x) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #1)
+  ) else 
+    (x0 ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i));;
+    x1 ::= (\<lambda>\<sigma>. (\<sigma> x1) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #1));;
+    x2 ::= (\<lambda>\<sigma>. (\<sigma> x2) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #2));;
+    x3 ::= (\<lambda>\<sigma>. (\<sigma> x3) +\<^sub>o (\<sigma> s) !\<^sub>o (\<sigma> i +\<^sub>o #3));;
+    i ::= (\<lambda>\<sigma>. (\<sigma> i) +\<^sub>o #4))
+  ) | j \<in> {1,2}]::int_and_list hyper_program"
+  let ?CsL2 = "[i \<mapsto> x ::= (\<lambda>\<sigma>. (\<sigma> x0) +\<^sub>o (\<sigma> x1) +\<^sub>o (\<sigma> x2) +\<^sub>o (\<sigma> x3)) | i \<in> {2}]::int_and_list hyper_program"
+
+  let ?P1 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 x = #0) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x0 = #0)"
+  let ?P2.0 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x1 = #0)"
+  let ?P2.1 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x2 = #0)"
+  let ?P2.2 = "\<lambda>S. (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 x3 = #0)"
+  let ?P3 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 i = #0) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 i = #0)"
+  let ?P4 = "\<lambda>S. (\<forall>\<sigma>1\<in>S 1.  snd \<sigma>1 n = len (snd \<sigma>1 s)) \<and> (\<forall>\<sigma>2\<in>S 2.  snd \<sigma>2 n = len (snd \<sigma>2 s))"
+  let ?PL2 = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s) \<and> (snd \<sigma>1 i) = (snd \<sigma>1' i)) \<and> 
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s) \<and> (snd \<sigma>2 i) = (snd \<sigma>2' i)) \<and> 
+                (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 n) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>2 n) mod\<^sub>o #4 = #0) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 i) mod\<^sub>o #4 = #0) \<and> (\<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>2 i) mod\<^sub>o #4 = #0) \<and>
+                (\<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 n = len (snd \<sigma>1 s)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). snd \<sigma>2 n = len (snd \<sigma>2 s)) \<and>
+                (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>1 \<in> (S 1). 
+                  (snd \<sigma>1 s) = (snd \<sigma>2 s) \<and>
+                  (snd \<sigma>1 x) = (snd \<sigma>2 x) \<and> 
+                  (snd \<sigma>1 i) = (snd \<sigma>2 i)
+                ) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>xs::int list. (snd \<sigma>1 s) = (ListV xs)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>xs::int list. (snd \<sigma>2 s) = (ListV xs)) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>n'::int. (snd \<sigma>1 n) = (#n')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>n'::int. (snd \<sigma>2 n) = (#n')) \<and>
+               (\<forall>\<sigma>1 \<in> (S 1). \<exists>i'::int. (snd \<sigma>1 i) = (#i')) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<exists>i'::int. (snd \<sigma>2 i) = (#i'))
+              )"
+  have eq:"?Cs = ?Cs1 ;;\<^sub>H ?Cs2.0 ;;\<^sub>H ?Cs2.1 ;;\<^sub>H ?Cs2.2 ;;\<^sub>H ?Cs3 ;;\<^sub>H ?Cs4 ;;\<^sub>H ?CsL1 ;;\<^sub>H ?CsL2"
+    apply(rule)
+    by(auto simp add:fun_upd_def hyper_seq_def map_add_def map_comprehension_def)
+ 
+  show ?thesis
+    apply(simp only:eq)
+    apply(rule lockstep_seq[where ?R = "conj ?P ?P1"])
+     apply(rule precondition_conseq)
+    prefer 2
+      apply(rule assign_lockstep)
+        using assms
+        unfolding entails_def 
+         apply(simp only:conj_def)
+         apply(intro allI impI conjI)
+                apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+               apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+              apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+         apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+        apply(rule lockstep_seq[where ?R = "conj (conj ?P ?P1) ?P2.0"])
+         apply(rule precondition_conseq)
+          prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                  apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+        apply(rule lockstep_seq[where ?R = "conj (conj (conj ?P ?P1) ?P2.0) ?P2.1"])
+         apply(rule precondition_conseq)
+          prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2"])
+         apply(rule precondition_conseq)
+          prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+        apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3"])
+         apply(rule precondition_conseq)
+          prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(14) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+         apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis by(fastforce) qed
+        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3) ?P4"])
+         apply(rule precondition_conseq)
+          prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+                 apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+             apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(14) assms by(fastforce) qed
+            apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(15) assms by(fastforce) qed
+           apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using prems(16) assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
+          apply(erule conjE)+
+        subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
+        apply(rule precondition_conseq[where ?P'="?Iv"])
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) assms by(fastforce) qed
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) prems(15) by metis qed
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) prems(16) by metis qed
+                       apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(17) prems(6) by metis qed
+                      apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(18) prems(7) by metis qed
+                     apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(15) by auto qed
+                      apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(16) by auto qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(17) prems(15) prems(8) by(auto) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(18) prems(16) prems(9) by(auto) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis
+              using prems(3) prems(10-16) by(auto)
+          qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(17) prems(8) by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(18) prems(9) by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(15) by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(16) by(fastforce) qed
+          apply(rule lockstep_seq[where ?R="conj ?Iv (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
+           prefer 2
+           apply(rule postcondition_conseq[where Q'="?PL2"])
+          using assms
+          unfolding entails_def 
+            apply(intro allI impI conjI)
+            apply(erule conjE)+
+          apply metis
+            apply(rule precondition_conseq)
+             prefer 2
+          apply(rule assign_lockstep)
+          using assms
+          unfolding entails_def 
+           apply(simp only:conj_def)
+          apply(simp only: conj_assoc)
+           apply(intro allI impI conjI)
+                          apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+                         apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(3) by(fastforce) qed
+                        apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+                       apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+                      apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
+                     apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(7) assms by(fastforce) qed
+                    apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(8) assms by(fastforce) qed
+                   apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
+                  apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
+                 apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
+                apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
+               apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
+              apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(14) assms by(fastforce) qed
+             apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(15) assms by(fastforce) qed
+            apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(16) assms by(fastforce) qed
+           apply(erule conjE)+
+          subgoal premises prems proof - show ?thesis using prems(17) assms by(fastforce) qed
 
 
 
-subsubsection \<open>The example\<close>
+
+
+
+
+subsubsection \<open>The original example\<close>
 
 abbreviation simple_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, int_and_list) stmt" where
 "simple_reduction s x i n \<equiv>
@@ -7792,12 +8225,17 @@ abbreviation sa_reduction :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarr
   )
 "
 
+                             
+(*lemma "relational_upwards_closed {1,2} (\<lambda>m::nat. (\<lambda>S::int_and_list hyper_set. ((\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>1 i) <\<^sub>o (fst \<sigma>1 n) \<longleftrightarrow> (snd \<sigma>2 i) +\<^sub>o #3 <\<^sub>o (fst \<sigma>2 n)) \<longrightarrow> (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True)) 
+                                                  \<and> ((\<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>1 i) = #4 *\<^sub>o #int(m)) \<or> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2). (snd \<sigma>1 i) <\<^sub>o (fst \<sigma>1 n) \<longleftrightarrow> (snd \<sigma>2 i) +\<^sub>o #3 <\<^sub>o (fst \<sigma>2 n))))) 
+                                       (\<lambda>S::int_and_list hyper_set.  (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True))"*)
+
 
 
 (*The last conjunct in the precondition does not appear in the report and is purely technical:
   It is there to assure that s is of the correct type. The rest of the variables are directly initiated by the programs
   and so we do not need to assume their types in the precondition.*)
-proposition
+(*proposition
   fixes s x i n x0 x1 x2 x3 :: nat
   assumes vars_distinct : "distinct [s, x, i, n, x0, x1, x2, x3]"
   shows "(\<Turnstile>  {(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
@@ -8587,7 +9025,7 @@ proof -
                     from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
                   qed
                 qed
-                            
+                            *)
 
 
 
