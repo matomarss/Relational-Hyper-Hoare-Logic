@@ -7808,7 +7808,7 @@ proposition
              {(\<lambda>S::int_and_list hyper_set. \<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>2 x) = (snd \<sigma>1 x))})"
 proof -
   let ?bs = "(\<lambda>j. if (j=1) then (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n)) else (\<lambda>\<sigma>. ((\<sigma> i) +\<^sub>o #3) <\<^sub>o (\<sigma> n)))"
-  let ?rf = "(\<lambda>j. if (j=1) then 4 else 1)"
+  let ?rf = "(\<lambda>j. if (j=1) then 8 else 2)"
   let ?P = "(\<lambda>S::int_and_list hyper_set. (\<forall>\<sigma>2 \<in> (S 2). \<exists>\<sigma>1 \<in> (S 1). True) 
               \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>2 \<in> (S 2).(snd \<sigma>1 s) = (snd \<sigma>2 s))
               \<and> (\<forall>\<sigma>1 \<in> (S 1). \<forall>\<sigma>1' \<in> (S 1).(snd \<sigma>1 s) = (snd \<sigma>1' s)) \<and> (\<forall>\<sigma>2 \<in> (S 2). \<forall>\<sigma>2' \<in> (S 2).(snd \<sigma>2 s) = (snd \<sigma>2' s))
@@ -8547,8 +8547,47 @@ proof -
                   done
               qed
                 prefer 3
-              apply(simp)
-                             
+                apply(simp)
+               prefer 2
+               apply(rule precondition_conseq)
+                prefer 2
+              apply(rule assume_lockstep)
+              using assms
+              unfolding entails_def 
+               apply(intro allI impI conjI)
+                          apply(erule conjE)+
+              subgoal premises prems for S
+              proof -         
+                have H0:"\<forall>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S 1. snd \<sigma>1 i -\<^sub>o snd \<sigma>2 i \<le>\<^sub>o #3" using prems(7,12,13,10) by fastforce
+                let ?S' = "(if (2::int) \<in> {1, 2} then {(l, \<sigma>) |l \<sigma>. (l, \<sigma>) \<in> S 2 \<and> lnot (if (2::int) = 1 then \<lambda>\<sigma>. \<sigma> i <\<^sub>o \<sigma> n else (\<lambda>\<sigma>. \<sigma> i +\<^sub>o #3 <\<^sub>o \<sigma> n)) \<sigma>} else S 2)"
+                show ?thesis
+               apply(intro ballI allI impI conjI)
+                  subgoal premises prems2 for \<sigma>2'  proof -
+                    from prems2 have "\<sigma>2' \<in> (S 2)" by auto
+                    with prems(2) obtain \<sigma>1 where \<sigma>w:"\<sigma>1 \<in> (S 1)" by blast
+                    from H0 have "snd \<sigma>1 i -\<^sub>o snd \<sigma>2' i \<le>\<^sub>o #3" using \<open>\<sigma>2' \<in> (S 2)\<close> \<open>\<sigma>1 \<in> (S 1)\<close> by auto
+                    from prems2 have "\<not>(snd \<sigma>2' i +\<^sub>o #3 <\<^sub>o snd \<sigma>2' n)" unfolding lnot_def by auto
+                    have H:"(snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #0)"
+                      using prems(10) \<sigma>w  by fastforce 
+                    have "(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n) \<or> (snd \<sigma>1 i <\<^sub>o snd \<sigma>1 n)"
+                      using prems(10) prems(12) \<sigma>w by fastforce
+                    thus ?thesis
+                    proof
+                      assume "(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)"
+                      with H have 
+                    from prems2 obtain \<sigma>2 where "\<sigma>2 = (fst \<sigma>2', snd \<sigma>2')"
+
+                    from prems(3) have "snd \<sigma>1 i = snd \<sigma>2 i +\<^sub>o #0"
+                      using prems(12) prems(13) prems2 by fastforce
+                    moreover have gr:"(snd \<sigma>1 i \<ge>\<^sub>o snd \<sigma>1 n)" using prems(14) prems2 prems(10) prems(12)
+                      unfolding holds_forall_hyper_def lnot_hyper_def by(force)
+                    ultimately have "\<not>((snd \<sigma>1 n mod\<^sub>o #4 = #3) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #2) \<or> (snd \<sigma>1 n mod\<^sub>o #4 = #1))" using prems(7) prems2(1,2) prems(12) prems(13)
+                      by fastforce
+                    with H have "(snd \<sigma>1 n mod\<^sub>o #4 = #0)" by auto
+                    from this show ?thesis using prems(7) gr prems2(1,2) by fastforce
+                  qed
+                qed
+                            
 
 
 
