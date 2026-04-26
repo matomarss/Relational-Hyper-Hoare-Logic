@@ -10530,6 +10530,166 @@ proof -
                                              \<and>
                   (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 p = snd \<sigma>0 c)
                   ))"
+  let ?Q = "\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x))"
+  let ?V = "\<lambda>J::nat set. if J = {0,1} then (\<lambda>S::nat hyper_set. (\<forall>(\<sigma>0)\<in>(S 0). prime ((snd \<sigma>0) c))) else (
+                if J = {1} then (\<lambda>S::nat hyper_set. (\<forall>\<sigma>0\<in>(S 0). \<not>prime ((snd \<sigma>0) c))) else (\<lambda>S::nat hyper_set. False))"
+
+  let ?bodies = "(\<lambda>j. (if (j=0) then (
+                       IF (\<lambda>s. prime (s c)) THEN (
+                         x ::= (\<lambda>s. (s x) + (s c));;
+                         i ::= (\<lambda>s. (s i) + 1)
+                       ) FI;;
+                      c ::= (\<lambda>s. (s c) + 1)
+                   )
+                  else (     
+                       p ::= (\<lambda>s. (next_prime (s p)));;
+                       x ::= (\<lambda>s. (s x) + (s p));;
+                       i ::= (\<lambda>s. (s i) + 1))))"
+  let ?conds = "(\<lambda>j s. s i < s n)"
+  show ?thesis
+    apply(simp only:eq1)
+    apply(rule lockstep_seq[where ?R="?P1"])
+     apply(rule precondition_conseq)
+      prefer 2
+      apply(rule assign_lockstep)
+    using assms
+    unfolding entails_def
+     apply(intro allI impI conjI)
+        apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+       apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(3) by(fastforce) qed
+      apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(4) by(fastforce) qed
+     apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(5) by(fastforce) qed
+    apply(rule lockstep_seq[where ?R="?P1"])
+     apply(rule precondition_conseq)
+      prefer 2
+      apply(rule assign_lockstep)
+    using assms
+    unfolding entails_def
+     apply(intro allI impI conjI)
+        apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(2) by(fastforce) qed
+       apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(3) by(fastforce) qed
+      apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(4) by(fastforce) qed
+     apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(5) by(fastforce) qed
+    apply(rule lockstep_seq[where ?R="?Iv 0"])
+     apply(rule precondition_conseq)
+      prefer 2
+      apply(rule assign_lockstep)
+    using assms
+    unfolding entails_def
+     apply(intro allI impI conjI)
+          apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(2) assms by(fastforce) qed
+         apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(3) assms by(fastforce) qed
+        apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
+       apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(5) assms by(fastforce) qed
+      apply(erule conjE)+ subgoal premises prems proof - show ?thesis by(fastforce) qed
+    apply(erule conjE)+ subgoal premises prems proof - show ?thesis by(fastforce) qed
+    apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper (\<lambda>j. (\<lambda>s. (s i) < (s n)))))"])
+     apply (simp add: entail_conj_weaken)
+    apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "?Q" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = "(\<lambda>j. (\<lambda>s. (s i) < (s n)))" and Iv="?Iv"])
+  proof -
+    show "\<forall>na. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv na) (conj (holds_for_prog_set J (\<lambda>j s. s i < s n)) (?V J))} [[i \<mapsto> ?bodies i  | i \<in> J]] { ?Iv (Suc na) }"
+      sorry
+  next
+    (*Step 4.2*)
+    show "\<forall>n. entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)" 
+    proof
+      fix m::nat
+      from bigger_prime obtain m' where "m \<le> m'" and "prime m'" 
+        using order_less_imp_le by blast
+      show "entails (?Iv m) (all_unfinished_can_be_stepped_after m ?Iv {0,1} ?conds ?V)"
+      proof(intro allI ballI impI entailsI conjI exI)
+        from \<open>m \<le> m'\<close> show "m \<le> m'" by auto
+      next
+        fix S 
+        fix i'::nat
+        fix S'
+        assume "?Iv m S" and "?Iv m' S'" and "i' \<in> {0,1}" and hfa:"\<not> holds_forall (lnot (\<lambda>s. s i < s n)) (S' i')"
+        from \<open>?Iv m' S'\<close> hfa have H1: "(holds_for_prog_set {0,1} (\<lambda>j s. s i < s n)) S'" 
+          unfolding holds_for_prog_set_def holds_forall_def lnot_def holds_forall_hyper_def
+          using \<open>i' \<in> {0, 1}\<close>
+          by (metis empty_iff insert_iff)
+        from \<open>?Iv m' S'\<close>  \<open>prime m'\<close> have H2: "\<forall>\<sigma>0\<in>S' 0. prime (snd \<sigma>0 c)" by fastforce
+        show "\<exists>J\<in>Pow {0, 1}. i' \<in> J \<and> conj (holds_for_prog_set J (\<lambda>j s. s i < s n))
+          (if J = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c)
+           else if J = {1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False))
+            S'"
+        proof 
+          show "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. s i < s n))
+          (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c) else if {0,1} = {1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False)) S'"
+            using H1 H2 \<open>i' \<in> {0,1}\<close>
+            by(auto simp add:conj_def)
+        next
+          show "{0, 1} \<in> Pow {0, 1} " by auto
+        qed
+      qed
+    qed
+  next
+    (*Step 4.3*)
+    show "\<forall>n. entails (?Iv n) (can_step_subset_or_all_finished {0,1} ?conds ?V)" 
+    proof(intro allI entailsI)
+      fix m S
+      assume asm:"?Iv m S"
+      from asm have "(\<forall>\<sigma>0\<in>S 0. \<not>(snd \<sigma>0 i < snd \<sigma>0 n)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(snd \<sigma>1 i < snd \<sigma>1 n)) \<or> (\<forall>\<sigma>0\<in>S 0. (snd \<sigma>0 i < snd \<sigma>0 n)) \<and> (\<forall>\<sigma>1\<in>S 1. (snd \<sigma>1 i < snd \<sigma>1 n))"
+        by metis
+      thus "(can_step_subset_or_all_finished {0,1} ?conds ?V) S" 
+      proof
+        assume asm:"(\<forall>\<sigma>0\<in>S 0. \<not>(snd \<sigma>0 i < snd \<sigma>0 n)) \<and> (\<forall>\<sigma>1\<in>S 1. \<not>(snd \<sigma>1 i < snd \<sigma>1 n))"
+        show ?thesis
+          unfolding disj_def
+          apply (rule disjI2)
+          unfolding holds_forall_hyper_def lnot_hyper_def
+          using asm
+          by(auto)
+      next
+        assume asm1: "(\<forall>\<sigma>0\<in>S 0. snd \<sigma>0 i < snd \<sigma>0 n) \<and> (\<forall>\<sigma>1\<in>S 1. snd \<sigma>1 i < snd \<sigma>1 n)"
+        from asm have "(\<forall>\<sigma>0\<in>S 0. prime ((snd \<sigma>0) c)) \<or> (\<forall>\<sigma>0\<in>S 0. \<not>prime ((snd \<sigma>0) c))" by auto
+        thus ?thesis
+        proof(rule)
+          assume asm2: "\<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c)"
+          with asm1 have "(\<forall>\<sigma>0\<in>S 0. snd \<sigma>0 i < snd \<sigma>0 n) \<and> (\<forall>\<sigma>1\<in>S 1. snd \<sigma>1 i < snd \<sigma>1 n) \<and> (\<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c))" by auto
+          show ?thesis unfolding disj_def disj_I_def conj_def holds_for_prog_set_def holds_forall_hyper_def
+            apply (rule disjI1)
+          proof
+            from asm1 asm2 show "(\<forall>ia\<in>{0,1}. \<forall>\<phi>\<in>S ia. snd \<phi> i < snd \<phi> n) \<and> (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c) else if {0,1} = {1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False)) S"
+              by simp
+          next 
+            show "{0, 1} \<in> Pow {0, 1} - {{}}" by auto
+          qed
+        next
+          assume asm2: "\<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c)"
+          with asm1 have "(\<forall>\<sigma>1\<in>S 1. snd \<sigma>1 i < snd \<sigma>1 n) \<and> (\<forall>\<sigma>0\<in>S 0. \<not>prime (snd \<sigma>0 c))" by auto
+          show ?thesis unfolding disj_def disj_I_def conj_def holds_for_prog_set_def holds_forall_hyper_def
+            apply (rule disjI1)
+          proof
+            from asm1 asm2 show "(\<forall>ia\<in>{1::nat}. \<forall>\<phi>\<in>S ia. snd \<phi> i < snd \<phi> n) \<and> (if {1::nat} = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c) else if {1} = {1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False)) S"
+              by(auto)
+          next
+            show "{1} \<in> Pow {0, 1} - {{}}" by auto
+          qed
+        qed
+      qed
+    qed
+  next
+    show "\<forall>na. \<Turnstile> { (?Iv na)} [[i \<mapsto> Assume (lnot (?conds i)) | i \<in> {0,1}]] { ?Q }" 
+      apply(intro allI)
+      apply(rule precondition_conseq[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n)))"])
+       apply(intro entailsI)
+       apply fastforce
+      apply(rule precondition_conseq)
+      prefer 2
+       apply(rule assume_lockstep)
+      apply(intro entailsI)
+      unfolding lnot_def
+      by fastforce
+  next 
+    show "relational_upwards_closed {0, 1} (\<lambda>n. ?Q) ?Q" 
+      apply(auto simp add:relational_upwards_closed_def hyper_union_def hyper_ascending_def hyper_set_le_def)
+      by (metis snd_eqD)
+  next
+    show "{0, 1} \<noteq> {}" by auto
+  qed
+qed
+
 
 
 
