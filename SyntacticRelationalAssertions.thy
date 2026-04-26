@@ -10370,6 +10370,169 @@ subsection \<open>Refinement rule\<close>
 
 subsection \<open>Nonfixed alignment rule\<close>
 
+definition next_prime :: "nat \<Rightarrow> nat" where
+  "next_prime n = (LEAST p. prime p \<and> p > n)"
+
+
+abbreviation n_prime_sum_simp :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, nat) stmt" where
+"n_prime_sum_simp i x c n \<equiv>  
+  i ::= (\<lambda>s. 0);;
+  x ::= (\<lambda>s. 0);;
+  c ::= (\<lambda>s. 0);;
+  WHILE (\<lambda>s. (s i) < (s n)) DO (
+     IF (\<lambda>s. prime (s c)) THEN (
+       x ::= (\<lambda>s. (s x) + (s c));;
+       i ::= (\<lambda>s. (s i) + 1)
+     ) FI;;
+    c ::= (\<lambda>s. (s c) + 1)
+  )
+"
+
+
+abbreviation n_prime_sum_neat :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> (nat, nat) stmt" where
+"n_prime_sum_neat i x p n \<equiv>  
+  i ::= (\<lambda>s. 0);;
+  x ::= (\<lambda>s. 0);;
+  p ::= (\<lambda>s. 0);;
+  WHILE (\<lambda>s. (s i) < (s n)) DO (
+     p ::= (\<lambda>s. (next_prime (s p)));;
+     x ::= (\<lambda>s. (s x) + (s p));;
+     i ::= (\<lambda>s. (s i) + 1)
+    )
+"
+
+
+
+
+
+proposition
+  fixes i x c p n::nat
+  assumes "distinct [i,x,c,p,n]"
+  shows "(\<Turnstile>  {(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x)) 
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 0). (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 1). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 n) = (snd \<sigma>1 n))
+)} 
+            [[0 \<mapsto> n_prime_sum_simp i x c n, 1 \<mapsto> n_prime_sum_neat i x p n]::nat hyper_program] 
+             {(\<lambda>S::nat hyper_set. \<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x))})"
+proof -
+  let ?Cs = "[0 \<mapsto> n_prime_sum_simp i x c n, 1 \<mapsto> n_prime_sum_neat i x p n]::nat hyper_program"
+  let ?Cs1 = "[j \<mapsto> i ::= (\<lambda>s. 0) | j \<in> {0,1}]::nat hyper_program"
+  let ?Cs2 = "[j \<mapsto> x ::= (\<lambda>s. 0) | j \<in> {0,1}]::nat hyper_program"
+  let ?Cs3 = "[j \<mapsto> (if (j=0) then c else p) ::= (\<lambda>s. 0) | j \<in> {0,1}]::nat hyper_program"
+  let ?Cs4 = "[ j \<mapsto> WHILE (\<lambda>s. (s i) < (s n)) DO (if (j=0) then (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1)
+                     )
+                    else (     
+                         p ::= (\<lambda>s. (next_prime (s p)));;
+                         x ::= (\<lambda>s. (s x) + (s p));;
+                         i ::= (\<lambda>s. (s i) + 1)))| j \<in> {0,1}]::nat hyper_program"
+  
+  let ?Cs4_bodies = "[ j \<mapsto> (if (j=0) then (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1)
+                     )
+                    else (     
+                         p ::= (\<lambda>s. (next_prime (s p)));;
+                         x ::= (\<lambda>s. (s x) + (s p));;
+                         i ::= (\<lambda>s. (s i) + 1)))| j \<in> {0,1}]::nat hyper_program"
+  let ?Cs4_body0 = "[ j \<mapsto> (IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI;;
+                        c ::= (\<lambda>s. (s c) + 1))| j \<in> {0}]::nat hyper_program"
+  let ?Cs4_body0p1 = "[ j \<mapsto> IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI | j \<in> {0}]::nat hyper_program"
+  let ?Cs4_body0p2 = "[ j \<mapsto> c ::= (\<lambda>s. (s c) + 1)| j \<in> {0}]::nat hyper_program"
+  let ?Cs4_bodiesp1 = "[ j \<mapsto> p ::= (\<lambda>s. (next_prime (s p)))| j \<in> {1}]::nat hyper_program"
+  let ?Cs4_bodiesp2 = "[ j \<mapsto> (if (j=0) then (
+                         IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI
+                     )
+                    else (     
+                         x ::= (\<lambda>s. (s x) + (s p));;
+                         i ::= (\<lambda>s. (s i) + 1)))| j \<in> {0,1}]::nat hyper_program"
+  let ?Cs4_bodiesp3 = "[ j \<mapsto> c ::= (\<lambda>s. (s c) + 1)| j \<in> {0}]::nat hyper_program"
+  let ?Cs4_bodiesp2_0 = "[ j \<mapsto> IF (\<lambda>s. prime (s c)) THEN (
+                           x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1)
+                         ) FI| j \<in> {0}]::nat hyper_program"
+  let ?Cs4_bodiesp2_1 = "[ j \<mapsto> x ::= (\<lambda>s. (s x) + (s p));;
+                         i ::= (\<lambda>s. (s i) + 1)| j \<in> {1}]::nat hyper_program"
+  let ?Cs4_bodiesp2_0body = "[ j \<mapsto> x ::= (\<lambda>s. (s x) + (s c));;
+                           i ::= (\<lambda>s. (s i) + 1) | j \<in> {0}]::nat hyper_program"
+  let ?Cs4_bodiesp2p1 = "[ j \<mapsto> x ::= (if (j=0) then (\<lambda>s. (s x) + (s c)) else (\<lambda>s. (s x) + (s p))) | j \<in> {0,1}]::nat hyper_program"
+  let ?Cs4_bodiesp2p2 = "[j\<mapsto> i ::= (\<lambda>s. (s i) + 1) | j \<in> {0,1}]::nat hyper_program"
+
+  have eq1: "?Cs = ?Cs1 ;;\<^sub>H ?Cs2 ;;\<^sub>H ?Cs3 ;;\<^sub>H ?Cs4"
+    apply(rule)
+    by(auto simp add:map_comprehension_def hyper_seq_def)
+  have eq2: "?Cs4_body0 = ?Cs4_body0p1 ;;\<^sub>H ?Cs4_body0p2"
+    apply(rule)
+    by(auto simp add:map_comprehension_def hyper_seq_def)
+  have eq3: "?Cs4_bodies = ?Cs4_bodiesp1 ;;\<^sub>H ?Cs4_bodiesp2 ;;\<^sub>H ?Cs4_bodiesp3"
+    apply(rule)
+    by(auto simp add:map_comprehension_def hyper_seq_def)
+  have eq4: "?Cs4_bodiesp2 = ?Cs4_bodiesp2_0 ++ ?Cs4_bodiesp2_1"
+    apply(rule)
+    by(auto simp add:map_comprehension_def map_add_def)
+  have eq5: "?Cs4_bodiesp2_0body ++ ?Cs4_bodiesp2_1 = ?Cs4_bodiesp2p1 ;;\<^sub>H ?Cs4_bodiesp2p2"
+    apply(rule)
+    by(auto simp add:map_comprehension_def map_add_def hyper_seq_def)
+
+  let ?P = "(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x)) 
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 0). (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 1). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                    \<and> (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 n) = (snd \<sigma>1 n)))"
+  let ?P1 = "(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x)) 
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 0). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 1). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n)))"
+
+  let ?Iv = "(\<lambda>m::nat. (\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 0). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 1). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                              \<and>
+                          (\<forall>\<sigma>0 \<in> (S 0). (snd \<sigma>0 c) = m)
+                                              \<and>
+                  (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). \<forall>c'. (snd \<sigma>1 p < c' \<and> c' < snd \<sigma>0 c) \<longrightarrow> \<not>(prime c'))
+                  ))"
+
+  let ?P_bodiesp1 = "(\<lambda>m::nat. (\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 0). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 1). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                          \<and>
+                 (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n))
+                                              \<and>
+                          (\<forall>\<sigma>0 \<in> (S 0). (snd \<sigma>0 c) = m)
+                                              \<and>
+                  (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). \<forall>c'. (snd \<sigma>1 p < c' \<and> c' < snd \<sigma>0 c) \<longrightarrow> \<not>(prime c'))
+                                             \<and>
+                  (\<forall>\<sigma>0 \<in> (S 0). \<forall>\<sigma>1 \<in> (S 1). snd \<sigma>1 p = snd \<sigma>0 c)
+                  ))"
+
+
+
 
 subsubsection \<open>A more complex example\<close>
 
