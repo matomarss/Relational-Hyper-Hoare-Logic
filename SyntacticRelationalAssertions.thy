@@ -500,7 +500,7 @@ lemma sem_lifted_hyper_seq:
      apply simp_all
   using sem_seq by blast
 
-theorem lockstep_seq:
+theorem seq_extension:
   assumes "\<Turnstile> { P } [ Cs ] { R }"
       and "\<Turnstile> { R } [ Cs' ] { Q }"
     shows "\<Turnstile> { P } [ hyper_seq Cs Cs' ] { Q }"
@@ -528,7 +528,7 @@ proof -
      apply (metis option.collapse seq_opt.simps(2,3))
     using assms(3)
     by (metis disjoint_iff_not_equal domI domIff seq_opt.simps(3))
-  with lockstep_seq show ?thesis using assms(1) assms(2) by auto
+  with seq_extension show ?thesis using assms(1) assms(2) by auto
 qed
 
 subsection \<open>Assume rule\<close>
@@ -749,7 +749,7 @@ qed
 
 
 
-theorem rule_assume_syntactic:
+theorem assumeS_rel:
   "\<Turnstile> { interp_assert (transform_assume (pbexp_to_assertion 0 pb) P) } [ [0 \<mapsto> Assume (interp_pbexp pb)] ] {interp_assert P}"
   by (simp add: rule_assume_syntactic_general)
 
@@ -773,7 +773,7 @@ proof (rule relational_hyper_hoare_tripleI)
     apply (case_tac "n = i")
     by (simp_all add: assms)
   ultimately show "Q (sem_lifted Cs S)"
-    using lockstep_seq[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
+    using seq_extension[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
     by (metis assms(2) assms(3) relational_hyper_hoare_triple_def)
 qed
 
@@ -1321,7 +1321,7 @@ proof (rule relational_hyper_hoare_tripleI)
 qed
 
 
-theorem rule_havoc_syntactic:
+theorem havocS_rel:
   "\<Turnstile> { interp_assert (transform_havoc x P) } [ [0 \<mapsto> Havoc x] ] {interp_assert P}"
   by (simp add: rule_havoc_syntactic_general)
 
@@ -1506,7 +1506,7 @@ qed
 
 
 
-theorem rule_assign_syntactic:
+theorem assignS_rel:
   "\<Turnstile> { interp_assert (transform_assign x pe P) } [ [0 \<mapsto> Assign x (interp_pexp pe)] ] {interp_assert P}"
   by (simp add: rule_assign_syntactic_general)
 
@@ -1709,18 +1709,31 @@ lemma ascending_iterate_filter:
 
 section \<open>Consequence Rules\<close>
 
-lemma precondition_conseq:
+
+theorem cons:
+  assumes "entails P P'"
+      and "entails Q' Q"
+      and "\<Turnstile> {P'} [C] {Q'}"
+    shows "\<Turnstile> {P} [C] {Q}"
+  by (metis assms(1,2,3) entails_def relational_hyper_hoare_triple_def)
+
+corollary cons_prec:
   assumes "entails P P'"
       and "\<Turnstile> {P'} [C] {Q}"
     shows "\<Turnstile> {P} [C] {Q}"
-  by (metis (mono_tags, lifting) assms(1,2) entails_def relational_hyper_hoare_triple_def)
+  apply(rule cons)
+  using assms apply simp
+   apply(rule entails_refl)
+  using assms by simp
 
-lemma postcondition_conseq:
+corollary cons_post:
   assumes "entails Q' Q"
       and "\<Turnstile> {P} [C] {Q'}"
     shows "\<Turnstile> {P} [C] {Q}"
-  by (metis (mono_tags, lifting) assms(1,2) entails_def relational_hyper_hoare_triple_def)
-
+  apply(rule cons)
+   apply(rule entails_refl)
+  using assms apply simp
+  using assms by simp
 
 
 
@@ -1755,10 +1768,20 @@ definition holds_forall_hyper where
 definition low_exp_hyper where
   "low_exp_hyper I es S = (\<forall>i\<in>I. \<forall>i'\<in>I. \<forall>\<phi> \<phi>'. (\<phi> \<in> (S i) \<and> \<phi>' \<in> (S i')) \<longrightarrow> ((es i) (snd \<phi>) = (es i') (snd \<phi>')))"
 
+
 definition lnot_hyper where
   "lnot_hyper bs i \<sigma> = (\<not>(bs i) \<sigma>)"
 
+lemma low_exp_either: "(low_exp_hyper I bs) S \<Longrightarrow> (holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S)"
+  by (smt (verit) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
 
+lemma either_low_exp: "(holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S) \<Longrightarrow> low_exp_hyper I bs S"
+  by (smt (verit, del_insts) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
+
+corollary low_exp_equiv: "(low_exp_hyper I bs) = disj (holds_forall_hyper I bs) (holds_forall_hyper I (lnot_hyper bs))"
+  unfolding disj_def
+  apply(rule)
+  using low_exp_either either_low_exp by blast
 
 theorem if_lockstep_true:
   assumes "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
@@ -1809,11 +1832,7 @@ proof -
   with eqv rewrite_rule show "\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs))} [[ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }" by auto
 qed
 
-lemma low_exp_either: "(low_exp_hyper I bs) S \<Longrightarrow> (holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S)"
-  by (smt (verit) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
 
-lemma either_low_exp: "(holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S) \<Longrightarrow> low_exp_hyper I bs S"
-  by (smt (verit, del_insts) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
 
 
 text\<open> A rule to progress all if statements in a lockstep given all executions will either take the first branch
@@ -1898,20 +1917,12 @@ proof -
   hence ent_conj:"entails P (conj P (holds_forall_hyper I ?bs'))"
     by (metis (lifting) entail_conj entails_def)
   have "\<Turnstile> {conj P (holds_forall_hyper I ?bs')} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" 
-  proof(rule if_lockstep_true)
-    show "\<Turnstile> {Logic.conj P
-         (holds_forall_hyper I (pick_branch P bs bs (lnot_hyper bs)))} [map_comprehension (pick_branch P bs Cs1 Cs2) (\<lambda>i. i \<in> I)] {Q}"
-      unfolding relational_hyper_hoare_triple_def
-    proof(intro allI impI)
-      fix S
-      assume "Logic.conj P (holds_forall_hyper I (pick_branch P bs bs (lnot_hyper bs))) S"
-      hence "P S"
-        by (simp add: conj_def)
-      with assms(2) show "Q (sem_lifted (map_comprehension (pick_branch P bs Cs1 Cs2) (\<lambda>i. i \<in> I)) S)"
-        by (simp add: relational_hyper_hoare_triple_def) 
-    qed
-  qed
-  with ent_conj precondition_conseq have "\<Turnstile> {P} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" by auto
+    apply(rule if_lockstep_true)
+    apply(rule cons_prec)
+    prefer 2
+    using assms(2) apply(simp)
+    by (simp add: entail_conj_weaken)
+  with ent_conj cons_prec have "\<Turnstile> {P} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" by auto
   with equiv rewrite_rule show ?thesis by auto
 qed
 
@@ -5737,7 +5748,7 @@ proof -
       show ?thesis 
         apply(simp only:asm)
         using H 
-        using entail_conj_weaken precondition_conseq by blast
+        using entail_conj_weaken cons_prec by blast
     next
       assume asm:"J \<noteq> I"
       show ?thesis using asm 
@@ -5810,7 +5821,7 @@ lemma map_add_com:
   by (metis (full_types) IntI assms map_add_dom_app_simps(3) map_le_def map_le_iff_map_add_commute map_le_map_add)
 
 
-lemma conj_rule_main:
+lemma conj_ext_main:
   assumes "((dom Cs2) - (dom Cs1)) \<in> irl_idcs Q1"
       and "Q1 (sem_lifted Cs1 S)"
     shows "Q1 (sem_lifted (Cs2 ++ Cs1) S)"
@@ -5833,7 +5844,7 @@ proof -
 qed
 
 text\<open>The generalized version of wp-conj\<close>
-theorem conj_rule:
+theorem conj_ext:
   assumes "\<Turnstile> {P} [Cs1] {Q1}"
       and "\<Turnstile> {P} [Cs2] {Q2}"
       and "((dom Cs2) - (dom Cs1)) \<in> irl_idcs Q1"
@@ -5845,8 +5856,8 @@ proof (rule relational_hyper_hoare_tripleI)
   assume "P S"
   from \<open>P S\<close> assms(1) relational_hyper_hoare_tripleE have H1: "Q1 (sem_lifted (Cs1) S)" by auto
   from \<open>P S\<close> assms(2) relational_hyper_hoare_tripleE have H2: "Q2 (sem_lifted (Cs2) S)" by auto
-  from map_add_com conj_rule_main H1 assms(3,5) have "Q1 (sem_lifted (Cs1 ++ Cs2) S)" by metis
-  moreover from conj_rule_main H2 assms(4,5) have "Q2 (sem_lifted (Cs1 ++ Cs2) S)" by metis  
+  from map_add_com conj_ext_main H1 assms(3,5) have "Q1 (sem_lifted (Cs1 ++ Cs2) S)" by metis
+  moreover from conj_ext_main H2 assms(4,5) have "Q2 (sem_lifted (Cs1 ++ Cs2) S)" by metis  
   ultimately show "conj Q1 Q2 (sem_lifted (Cs1 ++ Cs2) S)" unfolding conj_def by auto
 qed
 
@@ -6479,10 +6490,10 @@ proof -
   hence ent_conj:"entails P (conj P (holds_forall_hyper I ?bs'))"
     by (metis (lifting) entail_conj entails_def)
   with if_ht have "\<Turnstile> {conj P (holds_forall_hyper I ?bs')} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}"
-    using entail_conj_weaken precondition_conseq by blast
+    using entail_conj_weaken cons_prec by blast
   with if_lockstep_true_sym have "\<Turnstile> { conj P (holds_forall_hyper I ?bs') } [[i \<mapsto> (?Cs1' i) | i \<in> I]] { Q }"
     by fastforce
-  with ent_conj precondition_conseq have "\<Turnstile> { P } [[i \<mapsto> (?Cs1' i) | i \<in> I]] { Q }" 
+  with ent_conj cons_prec have "\<Turnstile> { P } [[i \<mapsto> (?Cs1' i) | i \<in> I]] { Q }" 
     by auto
   thus ?thesis by auto
 qed
@@ -6638,14 +6649,37 @@ proof (rule relational_hyper_hoare_tripleI)
   with asm show "P (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S)" by auto
 qed
 
+abbreviation havoc_hyper_set where
+"havoc_hyper_set I Xs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := v)) |l \<sigma> v. (l, \<sigma>) \<in> (S i) } else S i))"
 
-theorem false_prec:
+abbreviation havoc_prec where
+"havoc_prec P I Xs S \<equiv> P (havoc_hyper_set I Xs S)"
+
+theorem havoc_lockstep:
+  shows "\<Turnstile>  { havoc_prec P I Xs } [[i \<mapsto> Havoc (Xs i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "havoc_prec P I Xs S"
+  have "havoc_hyper_set I Xs S = (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S)"
+  proof
+    fix i
+    show "havoc_hyper_set I Xs S i = (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S) i"
+      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemHavoc)
+  qed
+  with asm show "P (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S)" by auto
+qed
+
+theorem false:
   shows "\<Turnstile> {(\<lambda>S. False)} [Cs] {Q}"
 proof (intro relational_hyper_hoare_tripleI)
   fix S
   assume "False"
   thus "Q (sem_lifted Cs S)" by auto
 qed
+
+theorem true:
+  shows "\<Turnstile> {P} [Cs] {(\<lambda>S. True)}"
+  by (simp add: relational_hyper_hoare_tripleI)
 
 
 theorem skip_lockstep:
@@ -6660,22 +6694,46 @@ proof (rule relational_hyper_hoare_tripleI)
     apply(simp only:eq) using \<open>P S\<close> by auto
 qed
 
-
-
-theorem postcondition_conj:
-  assumes "\<Turnstile> {P} [Cs] {Q1}"
-      and "\<Turnstile> {P} [Cs] {Q2}"
-    shows "\<Turnstile> {P} [Cs] {conj Q1 Q2}"
+theorem conj_rule:
+  assumes "\<Turnstile> {P1} [Cs] {Q1}"
+      and "\<Turnstile> {P2} [Cs] {Q2}"
+    shows "\<Turnstile> {conj P1 P2} [Cs] {conj Q1 Q2}"
 proof (intro relational_hyper_hoare_tripleI)
   fix S
-  assume "P S"
-  from \<open>P S\<close> assms(1) have H1:"Q1 (sem_lifted Cs S)"
-    by (simp add: relational_hyper_hoare_tripleE)
-  from \<open>P S\<close> assms(2) have H2:"Q2 (sem_lifted Cs S)"
-    by (simp add: relational_hyper_hoare_tripleE)
+  assume "(conj P1 P2) S"
+  from \<open>(conj P1 P2) S\<close> assms(1) have H1:"Q1 (sem_lifted Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE conj_def)
+  from \<open>(conj P1 P2) S\<close> assms(2) have H2:"Q2 (sem_lifted Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE conj_def)
   show "conj Q1 Q2 (sem_lifted Cs S)"
     by(auto simp add:conj_def H1 H2)
 qed
+
+theorem disj_rule:
+  assumes "\<Turnstile> {P1} [Cs] {Q1}"
+      and "\<Turnstile> {P2} [Cs] {Q2}"
+    shows "\<Turnstile> {disj P1 P2} [Cs] {disj Q1 Q2}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "disj P1 P2 S"
+  with assms have "Q1 (sem_lifted Cs S) \<or> Q2 (sem_lifted Cs S)"
+    unfolding disj_def relational_hyper_hoare_triple_def by auto
+  thus "disj Q1 Q2 (sem_lifted Cs S)" unfolding disj_def by auto
+qed
+
+
+corollary postcondition_conj:
+  assumes "\<Turnstile> {P} [Cs] {Q1}"
+      and "\<Turnstile> {P} [Cs] {Q2}"
+    shows "\<Turnstile> {P} [Cs] {conj Q1 Q2}"
+  apply(rule cons)
+   apply(rule entail_conj)
+    apply(rule entails_refl)
+   apply(rule entails_refl)
+  apply(rule conj_rule)
+  using assms by auto
+
+
 
 theorem if_lockstep_trueG:
   assumes "\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs' ++ [i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
@@ -6698,7 +6756,7 @@ proof -
   from dcs1 assms split_rule have H20:"\<Turnstile> { wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q} [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
     by blast
   have  H2: "\<Turnstile> { conj (wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q) (holds_forall_hyper I bs)} [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }" 
-    apply(rule precondition_conseq[where ?P'="(wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q)"])
+    apply(rule cons_prec[where ?P'="(wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q)"])
     prefer 2
     apply(simp only:H20)
     apply(intro entailsI)
@@ -6734,7 +6792,7 @@ proof -
   from dcs2 assms split_rule have H20:"\<Turnstile> { wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q} [[i \<mapsto> (Cs2 i) | i \<in> I]] { Q }"
     by blast
   have  H2: "\<Turnstile> { conj (wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q) (holds_forall_hyper I (lnot_hyper bs))} [[i \<mapsto> (Cs2 i) | i \<in> I]] { Q }" 
-    apply(rule precondition_conseq[where ?P'="(wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q)"])
+    apply(rule cons_prec[where ?P'="(wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q)"])
     prefer 2
     apply(simp only:H20)
     apply(intro entailsI)
@@ -6819,37 +6877,18 @@ proof -
   hence ent_conj:"entails P (conj P (holds_forall_hyper I ?bs'))"
     by (metis (lifting) entail_conj entails_def)
   have "\<Turnstile> {conj P (holds_forall_hyper I ?bs')} [Cs' ++ [ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" 
-  proof(rule if_lockstep_trueG)
-    show "\<Turnstile> {Logic.conj P
-         (holds_forall_hyper I (pick_branch P bs bs (lnot_hyper bs)))} [Cs'++map_comprehension (pick_branch P bs Cs1 Cs2) (\<lambda>i. i \<in> I)] {Q}"
-      unfolding relational_hyper_hoare_triple_def
-    proof(intro allI impI)
-      fix S
-      assume "Logic.conj P (holds_forall_hyper I (pick_branch P bs bs (lnot_hyper bs))) S"
-      hence "P S"
-        by (simp add: conj_def)
-      with assms(2) show "Q (sem_lifted (Cs'++(map_comprehension (pick_branch P bs Cs1 Cs2) (\<lambda>i. i \<in> I))) S)"
-        by (simp add: relational_hyper_hoare_triple_def) 
-    qed
-  next 
-    show "dom Cs' \<inter> I = {}" using assms by auto
-  qed
-  with ent_conj precondition_conseq have "\<Turnstile> {P} [Cs' ++ [ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" by auto
+    apply(rule if_lockstep_trueG)
+    apply(rule cons_prec)
+    prefer 2
+    using assms(2) apply(simp)
+     apply (simp add: entail_conj_weaken)
+    using assms by auto
+  with ent_conj cons_prec have "\<Turnstile> {P} [Cs' ++ [ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" by auto
   with equiv rewrite_rule show ?thesis by auto
 qed
 
 
-theorem disjunction_rule:
-  assumes "\<Turnstile> {P1} [Cs] {Q1}"
-      and "\<Turnstile> {P2} [Cs] {Q2}"
-    shows "\<Turnstile> {disj P1 P2} [Cs] {disj Q1 Q2}"
-proof (intro relational_hyper_hoare_tripleI)
-  fix S
-  assume "disj P1 P2 S"
-  with assms have "Q1 (sem_lifted Cs S) \<or> Q2 (sem_lifted Cs S)"
-    unfolding disj_def relational_hyper_hoare_triple_def by auto
-  thus "disj Q1 Q2 (sem_lifted Cs S)" unfolding disj_def by auto
-qed
+
 
 lemma seq_associativity_main:
   shows "sem_lifted (Cs1;;\<^sub>HCs2;;\<^sub>HCs3) S = sem_lifted ((Cs1;;\<^sub>HCs2);;\<^sub>HCs3) S"
@@ -7011,7 +7050,7 @@ proof -
   (*Step 1*)
   show ?thesis
     apply(simp only:eq0)
-  proof(rule lockstep_seq[where ?R = "?Iv_p1"])
+  proof(rule seq_extension[where ?R = "?Iv_p1"])
     have eq1: "[0 \<mapsto> i ::= (\<lambda>s. 100), 1 \<mapsto> i ::= (\<lambda>s. 100)] = [j \<mapsto> (\<lambda>j. i ::= (\<lambda>s. 100)) j | j \<in> {0,1}]"
       apply(rule)
       by(auto simp add:map_comprehension_def)
@@ -7019,7 +7058,7 @@ proof -
                   [[0 \<mapsto> i ::= (\<lambda>s. 100),1 \<mapsto> i ::= (\<lambda>s. 100)]] 
              {?Iv_p1}"
     apply(simp only:eq1)
-    apply(rule precondition_conseq)
+    apply(rule cons_prec)
     prefer 2
     apply(rule assign_lockstep)
     using assms
@@ -7030,7 +7069,7 @@ proof -
     show "\<Turnstile> {?Iv_p1} 
                             [(hyper_seq ?Cs2 ?Cs3)::nat hyper_program] 
                 {(\<lambda>S::nat hyper_set. \<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x))}"
-    proof (rule lockstep_seq[where ?R = "?Iv_p1"])
+    proof (rule seq_extension[where ?R = "?Iv_p1"])
       have eq2: "[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)] = [j \<mapsto> (\<lambda>j. x ::= (\<lambda>s. 1)) j | j \<in> {0,1}]"
         apply(rule)
         by(auto simp add:map_comprehension_def)
@@ -7038,7 +7077,7 @@ proof -
                     [[0 \<mapsto> x ::= (\<lambda>s. 1), 1 \<mapsto> x ::= (\<lambda>s. 1)]] 
                {?Iv_p1}"
       apply(simp only:eq2)
-      apply(rule precondition_conseq)
+      apply(rule cons_prec)
       prefer 2
       apply(rule assign_lockstep)
         using assms
@@ -7067,7 +7106,7 @@ proof -
           by(auto simp add:map_comprehension_def)
         show "\<Turnstile> {?Iv_p1} [[1 \<mapsto> c ::= (\<lambda>s. 0)]] {?Iv 0}"
           apply(simp only:eq3)
-          apply(rule precondition_conseq)
+          apply(rule cons_prec)
            prefer 2
            apply(rule assign_lockstep)
           using assms
@@ -7098,7 +7137,7 @@ proof -
         show "\<Turnstile> {?Iv 0} [?Cs3(1 \<mapsto> ?Loop2)] {?Q}"
           apply(simp only:eq4)
           apply(simp only:eq5)
-          apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper ?conds))"])
+          apply(rule cons_post[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper ?conds))"])
            apply (simp add: entail_conj_weaken)
           apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "?Q" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = ?conds and ?Cs = ?bodies and Iv="?Iv"])
         proof -
@@ -7114,9 +7153,9 @@ proof -
               assume "J = {0}"
               (*Step 4.1.1*)
               show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
-                apply(rule precondition_conseq[where ?P'="\<lambda>S. False"])
+                apply(rule cons_prec[where ?P'="\<lambda>S. False"])
                  prefer 2
-                 apply(rule false_prec)
+                 apply(rule false)
                 apply(intro entailsI)
                 unfolding conj_def
                 using \<open>J = {0}\<close>
@@ -7134,12 +7173,12 @@ proof -
               (*Step 4.1.2*)
               show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
                 apply(simp only:eq)
-                apply(rule lockstep_seq[where ?R="conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))"])
+                apply(rule seq_extension[where ?R="conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))"])
                  apply(simp only:eq1)
-                 apply(rule precondition_conseq[where ?P'="conj (conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))) (holds_forall_hyper {1} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))"])
+                 apply(rule cons_prec[where ?P'="conj (conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))) (holds_forall_hyper {1} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))"])
                   prefer 2
                   apply(rule if_lockstep_false)
-                  apply(rule postcondition_conseq)
+                  apply(rule cons_post)
                    prefer 2
                    apply(rule skip_lockstep)
                   apply(intro entailsI)
@@ -7148,7 +7187,7 @@ proof -
                  apply(intro entailsI)
                 unfolding holds_for_prog_set_def holds_forall_hyper_def lnot_hyper_def
                  apply (smt (z3) \<open>J = {1}\<close> bot_nat_0.not_eq_extremum empty_iff insert_iff less_numeral_extra(1))
-                apply(rule precondition_conseq)
+                apply(rule cons_prec)
                  prefer 2
                 apply(simp only:eq2)
                  apply(rule assign_lockstep)
@@ -7190,9 +7229,9 @@ proof -
               (*Step 4.1.3*)
               show "\<Turnstile> { conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc n) }"
                 apply(simp only:eq)
-                apply(rule lockstep_seq[where ?R="(?Iv n)"])
+                apply(rule seq_extension[where ?R="(?Iv n)"])
                  apply(simp only:eq1)
-                 apply(rule precondition_conseq)
+                 apply(rule cons_prec)
                 prefer 2
                   apply(rule if_lockstep_trueG[where ?P="conj (?Iv n) (conj (holds_for_prog_set J ?conds) (?V J))"])
                    prefer 2
@@ -7207,8 +7246,8 @@ proof -
                   apply(simp add:conj_def)
                   apply fastforce
                  apply(simp only:eq2)
-                 apply(rule lockstep_seq[where ?R = "(?Iv n)"])
-                  apply(rule precondition_conseq)
+                 apply(rule seq_extension[where ?R = "(?Iv n)"])
+                  apply(rule cons_prec)
                    prefer 2
                 apply(simp only:eq3)
                 apply(rule assign_lockstep)
@@ -7224,7 +7263,7 @@ proof -
                 apply(erule conjE)+
                 subgoal premises prems proof - show ?thesis using prems(8) assms(1) by fastforce qed
                 apply(simp only: eq4)
-                 apply(rule precondition_conseq)
+                 apply(rule cons_prec)
                   prefer 2
                   apply(rule assign_lockstep)
                  apply(intro entailsI allI impI conjI)
@@ -7239,7 +7278,7 @@ proof -
                  apply(erule conjE)+
                  subgoal premises prems proof - show ?thesis using prems(5) assms(1) by fastforce qed
                  apply(simp only:eq5)
-                 apply(rule precondition_conseq)
+                 apply(rule cons_prec)
                   prefer 2
                   apply (rule assign_lockstep)
                  apply(intro entailsI conjI impI allI)
@@ -7340,10 +7379,10 @@ proof -
           (*Step 4.4*)
           show "\<forall>n. \<Turnstile> { (?Iv n)} [[i \<mapsto> Assume (lnot (?conds i)) | i \<in> {0,1}]] { ?Q }" 
             apply(intro allI)
-            apply(rule precondition_conseq[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i)))"])
+            apply(rule cons_prec[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>0 \<in> (S 0). \<exists>\<sigma>1 \<in> (S 1). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i)))"])
              apply(intro entailsI)
              apply fastforce
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
             prefer 2
              apply(rule assume_lockstep)
             apply(intro entailsI)
@@ -8081,8 +8120,8 @@ proof -
 
   show ?thesis
     apply(simp only:eq)
-    apply(rule lockstep_seq[where ?R = "conj ?P ?P1"])
-     apply(rule precondition_conseq)
+    apply(rule seq_extension[where ?R = "conj ?P ?P1"])
+     apply(rule cons_prec)
     prefer 2
       apply(rule assign_lockstep)
         using assms
@@ -8109,8 +8148,8 @@ proof -
         subgoal premises prems proof - show ?thesis by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj ?P ?P1) ?P2.0"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj ?P ?P1) ?P2.0"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8140,8 +8179,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
           apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj ?P ?P1) ?P2.0) ?P2.1"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj ?P ?P1) ?P2.0) ?P2.1"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8173,8 +8212,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
           apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8208,8 +8247,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
           apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8247,8 +8286,8 @@ proof -
         subgoal premises prems proof - show ?thesis by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3) ?P4"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3) ?P4"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8290,7 +8329,7 @@ proof -
         subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
           apply(erule conjE)+
         subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
-        apply(rule precondition_conseq[where ?P'="?Iv"])
+        apply(rule cons_prec[where ?P'="?Iv"])
           using assms
           unfolding entails_def 
            apply(simp only:conj_def)
@@ -8344,15 +8383,15 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
            apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(14) by(fastforce) qed
-          apply(rule lockstep_seq[where ?R="conj ?Iv (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
+          apply(rule seq_extension[where ?R="conj ?Iv (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
            prefer 2
-           apply(rule postcondition_conseq[where Q'="?PL2"])
+           apply(rule cons_post[where Q'="?PL2"])
           using assms
           unfolding entails_def 
             apply(intro allI impI conjI)
             apply(erule conjE)+
           apply metis
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
              prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -8406,9 +8445,9 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(23) assms by(fastforce) qed
            apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
-          apply(rule precondition_conseq)
+          apply(rule cons_prec)
            prefer 2
-           apply(rule postcondition_conseq)
+           apply(rule cons_post)
            prefer 2
             apply(rule while_fixed_alignment[where Iv="?Iv" and rf="?rf"])
              prefer 2
@@ -8490,10 +8529,10 @@ proof -
           qed
           apply(simp only:eq2)
           apply(simp only: seq_associativity)
-          apply(rule lockstep_seq[where ?R="?Iv"])
+          apply(rule seq_extension[where ?R="?Iv"])
            apply(simp only: seq_associativity[symmetric])
            apply(simp only:eq3)
-           apply(rule precondition_conseq)
+           apply(rule cons_prec)
             prefer 2
           apply(simp only:if_then_else_skip_def)
             apply(rule if_lockstep_trueG[where P="conj ?Iv (holds_forall_hyper {1,2} ?bs)"])
@@ -8557,8 +8596,8 @@ proof -
             apply(simp add:map_comprehension_def hyper_seq_def dom_def)
           apply(simp only:if_then_else_skip_def[symmetric])
            apply(simp only:eq4)
-           apply(rule lockstep_seq[where ?R="?PC0"])
-           apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="?PC0"])
+           apply(rule cons_prec)
             prefer 2
           apply(simp only:if_then_else_skip_def)
              apply(rule if_lockstep_trueG[where P="conj ?Iv (holds_forall_hyper {1,2} ?bs)"])
@@ -8621,8 +8660,8 @@ proof -
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) unfolding holds_forall_hyper_def by fastforce qed
             apply(simp only:eqc0)
-            apply(rule lockstep_seq[where ?R="conj ?Iv (holds_forall_hyper {1,2} ?bs)"])
-             apply(rule precondition_conseq)
+            apply(rule seq_extension[where ?R="conj ?Iv (holds_forall_hyper {1,2} ?bs)"])
+             apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
                    using assms
@@ -8698,7 +8737,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) assms unfolding holds_forall_hyper_def by fastforce qed
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
              prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -8754,8 +8793,8 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(25) prems(7) prems(5) prems(18) prems(16) assms unfolding holds_forall_hyper_def by(fastforce) qed
-           apply(rule lockstep_seq[where ?R="?PC1"])
-           apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="?PC1"])
+           apply(rule cons_prec)
             prefer 2
           apply(simp only:if_then_else_skip_def)
              apply(rule if_lockstep_trueG[where P="?PC0"])
@@ -8818,8 +8857,8 @@ proof -
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) unfolding holds_forall_hyper_def by fastforce qed
             apply(simp only:eqc1)
-            apply(rule lockstep_seq[where ?R="?PC0"])
-             apply(rule precondition_conseq)
+            apply(rule seq_extension[where ?R="?PC0"])
+             apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
                    using assms
@@ -8875,7 +8914,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) assms unfolding holds_forall_hyper_def by fastforce qed
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
              prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -8975,8 +9014,8 @@ proof -
               qed
             qed
           qed
-           apply(rule lockstep_seq[where ?R="?PC2"])
-           apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="?PC2"])
+           apply(rule cons_prec)
             prefer 2
           apply(simp only:if_then_else_skip_def)
              apply(rule if_lockstep_trueG[where P="?PC1"])
@@ -9039,8 +9078,8 @@ proof -
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) unfolding holds_forall_hyper_def by fastforce qed
             apply(simp only:eqc2)
-            apply(rule lockstep_seq[where ?R="?PC1"])
-             apply(rule precondition_conseq)
+            apply(rule seq_extension[where ?R="?PC1"])
+             apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
                    using assms
@@ -9096,7 +9135,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) assms unfolding holds_forall_hyper_def by fastforce qed
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
              prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -9196,8 +9235,8 @@ proof -
               qed
             qed
           qed
-          apply(rule lockstep_seq[where ?R="?PC3"])
-           apply(rule precondition_conseq)
+          apply(rule seq_extension[where ?R="?PC3"])
+           apply(rule cons_prec)
             prefer 2
           apply(simp only:if_then_else_skip_def)
              apply(rule if_lockstep_trueG[where P="?PC2"])
@@ -9260,8 +9299,8 @@ proof -
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) unfolding holds_forall_hyper_def by fastforce qed
             apply(simp only:eqc3)
-            apply(rule lockstep_seq[where ?R="?PC2"])
-             apply(rule precondition_conseq)
+            apply(rule seq_extension[where ?R="?PC2"])
+             apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
                    using assms
@@ -9317,7 +9356,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(24) prems(19) prems(15) prems(10) prems(12) assms by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(25) assms unfolding holds_forall_hyper_def by fastforce qed
-            apply(rule precondition_conseq)
+            apply(rule cons_prec)
              prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -9384,7 +9423,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(23) assms by(fastforce) qed
              apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
-           apply(rule precondition_conseq)
+           apply(rule cons_prec)
             prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9450,7 +9489,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(23) assms by(fastforce) qed
           apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(24) assms by(fastforce) qed
-          apply(rule postcondition_conseq)
+          apply(rule cons_post)
            prefer 2
            apply(rule skip_lockstep)
           unfolding entails_def
@@ -9712,8 +9751,8 @@ proof -
 
   show ?thesis
     apply(simp only:eq)
-    apply(rule lockstep_seq[where ?R = "conj ?P ?P1"])
-     apply(rule precondition_conseq)
+    apply(rule seq_extension[where ?R = "conj ?P ?P1"])
+     apply(rule cons_prec)
     prefer 2
       apply(rule assign_lockstep)
         using assms
@@ -9736,8 +9775,8 @@ proof -
         subgoal premises prems proof - show ?thesis by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj ?P ?P1) ?P2.0"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj ?P ?P1) ?P2.0"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9763,8 +9802,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(9) assms by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj ?P ?P1) ?P2.0) ?P2.1"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj ?P ?P1) ?P2.0) ?P2.1"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9792,8 +9831,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(10) assms by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9823,8 +9862,8 @@ proof -
         subgoal premises prems proof - show ?thesis using prems(11) assms by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9858,8 +9897,8 @@ proof -
         subgoal premises prems proof - show ?thesis by(fastforce) qed
          apply(erule conjE)+
         subgoal premises prems proof - show ?thesis by(fastforce) qed
-        apply(rule lockstep_seq[where ?R = "conj (conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3) ?P4"])
-         apply(rule precondition_conseq)
+        apply(rule seq_extension[where ?R = "conj (conj (conj (conj (conj (conj ?P ?P1) ?P2.0) ?P2.1) ?P2.2) ?P3) ?P4"])
+         apply(rule cons_prec)
           prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9897,7 +9936,7 @@ proof -
         subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
           apply(erule conjE)+
         subgoal premises prems proof - show ?thesis using assms by(fastforce) qed
-        apply(rule precondition_conseq[where ?P'="?Iv1"])
+        apply(rule cons_prec[where ?P'="?Iv1"])
           using assms
           unfolding entails_def 
            apply(simp only:conj_def)
@@ -9929,10 +9968,10 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
            apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(14) by(fastforce) qed
-          apply(rule lockstep_seq[where ?R="conj ?Iv1 (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
+          apply(rule seq_extension[where ?R="conj ?Iv1 (holds_forall_hyper {1,2} (lnot_hyper ?bs))"])
            prefer 2
-           apply(rule lockstep_seq[where ?R="?PL2"])
-            apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="?PL2"])
+            apply(rule cons_prec)
              prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -9978,7 +10017,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(13) assms by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(14) assms unfolding holds_forall_hyper_def lnot_hyper_def by auto qed
-          apply(rule precondition_conseq[where ?P'="conj ?Iv2 (low_exp_hyper {2} (\<lambda>j. (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n))))"])
+          apply(rule cons_prec[where ?P'="conj ?Iv2 (low_exp_hyper {2} (\<lambda>j. (\<lambda>\<sigma>. (\<sigma> i) <\<^sub>o (\<sigma> n))))"])
           using assms
           unfolding entails_def 
           apply(simp only:conj_def)
@@ -10066,7 +10105,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(13) by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems for S proof - show ?thesis using prems(4) prems(6) unfolding low_exp_hyper_def by (metis singleton_iff) qed
-           apply(rule postcondition_conseq)
+           apply(rule cons_post)
           prefer 2
             apply(rule while_lockstep)
             prefer 2
@@ -10086,8 +10125,8 @@ proof -
           qed
           subgoal premises prems2 for S proof - show ?thesis using prems2(3) unfolding hyper_emp_def by auto qed
            apply(simp only:eq2)
-           apply(rule lockstep_seq[where ?R="conj ?PL3_b1 (holds_forall_hyper {2} (\<lambda>j \<sigma>. \<sigma> i <\<^sub>o \<sigma> n))"])
-            apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="conj ?PL3_b1 (holds_forall_hyper {2} (\<lambda>j \<sigma>. \<sigma> i <\<^sub>o \<sigma> n))"])
+            apply(rule cons_prec)
           prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -10124,7 +10163,7 @@ proof -
           subgoal premises prems proof - show ?thesis using prems(12) assms by(fastforce) qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(2) assms unfolding holds_forall_hyper_def by(fastforce) qed
-           apply(rule precondition_conseq)
+           apply(rule cons_prec)
             prefer 2
           apply(rule assign_lockstep)
           using assms
@@ -10322,7 +10361,7 @@ proof -
                 prefer 3
                 apply(simp)
                prefer 2
-               apply(rule precondition_conseq)
+               apply(rule cons_prec)
                 prefer 2
               apply(rule assume_lockstep)
               using assms
@@ -10583,8 +10622,8 @@ proof -
 
   show ?thesis
     apply(simp only:eq1)
-    apply(rule lockstep_seq[where ?R="?P1"])
-     apply(rule precondition_conseq)
+    apply(rule seq_extension[where ?R="?P1"])
+     apply(rule cons_prec)
       prefer 2
       apply(rule assign_lockstep)
     using assms
@@ -10594,8 +10633,8 @@ proof -
        apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(3) by(fastforce) qed
       apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(4) by(fastforce) qed
      apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(5) by(fastforce) qed
-    apply(rule lockstep_seq[where ?R="?P1"])
-     apply(rule precondition_conseq)
+    apply(rule seq_extension[where ?R="?P1"])
+     apply(rule cons_prec)
       prefer 2
       apply(rule assign_lockstep)
     using assms
@@ -10605,8 +10644,8 @@ proof -
        apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(3) by(fastforce) qed
       apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(4) by(fastforce) qed
      apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(5) by(fastforce) qed
-    apply(rule lockstep_seq[where ?R="?Iv 0"])
-     apply(rule precondition_conseq)
+    apply(rule seq_extension[where ?R="?Iv 0"])
+     apply(rule cons_prec)
       prefer 2
       apply(rule assign_lockstep)
     using assms
@@ -10619,7 +10658,7 @@ proof -
       apply(erule conjE)+ subgoal premises prems proof - show ?thesis by(fastforce) qed
       apply(erule conjE)+ subgoal premises prems proof - show ?thesis by(fastforce) qed
     apply(erule conjE)+ subgoal premises prems proof - show ?thesis by(fastforce) qed
-    apply(rule postcondition_conseq[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper (\<lambda>j. (\<lambda>s. (s i) < (s n)))))"])
+    apply(rule cons_post[where Q' = "conj ?Q (holds_forall_hyper {0,1} (lnot_hyper (\<lambda>j. (\<lambda>s. (s i) < (s n)))))"])
      apply (simp add: entail_conj_weaken)
     apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "?Q" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = "(\<lambda>j. (\<lambda>s. (s i) < (s n)))" and Iv="?Iv"])
   proof -
@@ -10633,9 +10672,9 @@ proof -
       proof (elim disjE)
         assume "J = {1}"
         show "\<Turnstile> { conj (?Iv m) (conj (holds_for_prog_set J ?conds) (?V J))} [[i \<mapsto> ?bodies i | i \<in> J]] { ?Iv (Suc m) }"
-          apply(rule precondition_conseq[where ?P'="\<lambda>S. False"])
+          apply(rule cons_prec[where ?P'="\<lambda>S. False"])
            prefer 2
-           apply(rule false_prec)
+           apply(rule false)
           apply(intro entailsI)
           unfolding conj_def
           using \<open>J = {1}\<close>
@@ -10645,9 +10684,9 @@ proof -
         show ?thesis 
           apply(simp only: asm)
           apply(simp only:eq6 eq2)
-          apply(rule lockstep_seq[where ?R="(conj (?Iv m) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c)))))"])
+          apply(rule seq_extension[where ?R="(conj (?Iv m) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c)))))"])
            apply(simp only:if_then_else_skip_def)
-           apply(rule precondition_conseq[where ?P'="conj (conj (?Iv m) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))"])
+           apply(rule cons_prec[where ?P'="conj (conj (?Iv m) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))) (holds_forall_hyper {0} (lnot_hyper (\<lambda>j. \<lambda>s. prime (s c))))"])
           using assms
           unfolding entails_def
             apply(simp only:conj_def)
@@ -10663,7 +10702,7 @@ proof -
              apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(10) unfolding holds_forall_hyper_def lnot_hyper_def by(fastforce) qed
           apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(10) unfolding holds_forall_hyper_def lnot_hyper_def by(fastforce) qed
            apply(rule if_lockstep_false)
-           apply(rule postcondition_conseq)
+           apply(rule cons_post)
           prefer 2
             apply(rule skip_lockstep)
           using assms
@@ -10679,7 +10718,7 @@ proof -
             apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(7) by(fastforce) qed
             apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(8) by(fastforce) qed
            apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(9) by(fastforce) qed
-          apply(rule precondition_conseq)
+          apply(rule cons_prec)
            prefer 2
            apply(rule assign_lockstep)
           using assms
@@ -10711,8 +10750,8 @@ proof -
         show ?thesis 
           apply(simp only:asm)
           apply(simp only:eq3)
-          apply(rule lockstep_seq[where ?R="conj (?P_bodiesp1 m) (holds_forall_hyper {0} (\<lambda>j. (\<lambda>s. prime (s c))))"])
-           apply(rule precondition_conseq)
+          apply(rule seq_extension[where ?R="conj (?P_bodiesp1 m) (holds_forall_hyper {0} (\<lambda>j. (\<lambda>s. prime (s c))))"])
+           apply(rule cons_prec)
             prefer 2
             apply(rule assign_lockstep)
           using assms
@@ -10743,14 +10782,14 @@ proof -
           qed
            apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(10) unfolding holds_forall_hyper_def by(fastforce) qed
           apply(simp only:eq4)
-          apply(rule lockstep_seq[where ?R="?P_bodiesp1 m"])
+          apply(rule seq_extension[where ?R="?P_bodiesp1 m"])
            apply(simp only:if_then_else_skip_def)
            apply(rule if_lockstep_trueG)
             prefer 2
           apply(simp add:map_comprehension_def dom_def)
            apply(simp only:eq5)
-           apply(rule lockstep_seq[where ?R="?P_bodiesp1 m"])
-            apply(rule precondition_conseq)
+           apply(rule seq_extension[where ?R="?P_bodiesp1 m"])
+            apply(rule cons_prec)
           prefer 2
              apply(rule assign_lockstep)
           using assms
@@ -10765,7 +10804,7 @@ proof -
               apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
             apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(7) assms by fastforce qed
             apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(8) assms by fastforce qed
-           apply(rule precondition_conseq)
+           apply(rule cons_prec)
             prefer 2
             apply(rule assign_lockstep)
           using assms
@@ -10778,7 +10817,7 @@ proof -
               apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(6) assms by(fastforce) qed
             apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(7) assms by fastforce qed
            apply(erule conjE)+ subgoal premises prems proof - show ?thesis using prems(8) assms by fastforce qed
-          apply(rule precondition_conseq)
+          apply(rule cons_prec)
            prefer 2
            apply(rule assign_lockstep)
           using assms
@@ -10875,10 +10914,10 @@ proof -
   next
     show "\<forall>na. \<Turnstile> { (?Iv na)} [[i \<mapsto> Assume (lnot (?conds i)) | i \<in> {0,1}]] { ?Q }" 
       apply(intro allI)
-      apply(rule precondition_conseq[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n)))"])
+      apply(rule cons_prec[where ?P'="(\<lambda>S::nat hyper_set. (\<forall>\<sigma>1 \<in> (S 1). \<exists>\<sigma>0 \<in> (S 0). (snd \<sigma>0 x) = (snd \<sigma>1 x) \<and> (snd \<sigma>0 i) = (snd \<sigma>1 i) \<and> (snd \<sigma>0 n) = (snd \<sigma>1 n)))"])
        apply(intro entailsI)
        apply fastforce
-      apply(rule precondition_conseq)
+      apply(rule cons_prec)
       prefer 2
        apply(rule assume_lockstep)
       apply(intro entailsI)
@@ -11022,7 +11061,7 @@ proof-
     by(auto simp add:map_comprehension_def map_add_def)
 
   show ?thesis
-    apply(rule precondition_conseq[where ?P'="conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))"])
+    apply(rule cons_prec[where ?P'="conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))"])
     using assms
     unfolding entails_def 
      apply(simp only:conj_def)
@@ -11105,7 +11144,7 @@ proof-
       apply(rule skip_lockstep)
      prefer 2
      apply(simp add:map_comprehension_def dom_def)
-    apply(rule precondition_conseq)
+    apply(rule cons_prec)
     prefer 2
     apply(rule assign_lockstep)
     using assms
