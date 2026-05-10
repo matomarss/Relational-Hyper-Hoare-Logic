@@ -3314,7 +3314,7 @@ abbreviation can_step_subset_or_all_finished2 where
 
 fun sem_lifted_stacked where
 "sem_lifted_stacked bs Cs S Js 0 = S" |
-"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> Js n (sem_lifted_stacked bs Cs S Js n)] (sem_lifted_stacked bs Cs S Js n)"
+"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> Js n (sem_lifted_stacked bs Cs S Js n)] (sem_lifted_stacked bs Cs S Js n)"
 
 
 
@@ -3359,7 +3359,7 @@ fun priority_JS_based_execution_aux where
      (let (Sn,l,q) = priority_JS_based_execution_aux bs Cs S JS I n;
           p = qth_program I q;
           J = priority_picker JS p n Sn;
-          Sn' = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] Sn
+          Sn' = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] Sn
       in
         if p \<in> J \<or> (holds_forall (lnot (bs p)) (Sn p)) then
           if Suc q < l then (Sn', l, Suc q)
@@ -3419,7 +3419,7 @@ qed
 
 
 lemma priority_JS_based_execution_step:
-  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]
+  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
          (priority_JS_based_execution bs Cs S JS I n)"
 proof -
   obtain Sn l q where
@@ -3428,7 +3428,7 @@ proof -
   let ?p = "qth_program I q"
   let ?J = "priority_picker JS ?p n Sn"
   have "priority_JS_based_execution bs Cs S JS I (Suc n) =
-        sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> ?J]
+        sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
           (priority_JS_based_execution bs Cs S JS I n)"
     unfolding priority_JS_based_execution_def
     using Haux
@@ -3450,7 +3450,7 @@ lemma priority_picker_in_or_none:
 lemma priority_JS_based_execution_step_strong:
   assumes nz: "\<forall>n S. JS n S \<noteq> {}"
   shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) =
-           sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]
+           sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
              (priority_JS_based_execution bs Cs S JS I n)
          \<and> J \<in> JS n (priority_JS_based_execution bs Cs S JS I n)
          \<and> (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> J
@@ -3480,7 +3480,7 @@ proof -
 
   have Hstep:
     "priority_JS_based_execution bs Cs S JS I (Suc n) =
-      sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> ?J]
+      sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
         (priority_JS_based_execution bs Cs S JS I n)"
     using Haux
     unfolding priority_JS_based_execution_def
@@ -3488,7 +3488,7 @@ proof -
 
   from Hstep Hpick Hstate
   have "priority_JS_based_execution bs Cs S JS I (Suc n) =
-          sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> ?J]
+          sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
             (priority_JS_based_execution bs Cs S JS I n)
         \<and> ?J \<in> JS n (priority_JS_based_execution bs Cs S JS I n)
         \<and> (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> ?J
@@ -3528,14 +3528,14 @@ lemma priority_JS_based_execution_base:
 
 fun sem_lifted_after_n_steps where
 "sem_lifted_after_n_steps bs Cs S I 0 = S" |
-"sem_lifted_after_n_steps bs Cs S I (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> I] (sem_lifted_after_n_steps bs Cs S I n)"
+"sem_lifted_after_n_steps bs Cs S I (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> I] (sem_lifted_after_n_steps bs Cs S I n)"
 
 
 
 
 lemma state_preservation:
   assumes "\<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     and "n' \<ge> n"
     and  JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
   shows "\<forall>n''. n \<le> n'' \<and> n''\<le>n' \<longrightarrow> (priority_JS_based_execution bs Cs S JS I n'') i = (priority_JS_based_execution bs Cs S JS I n) i"
@@ -3556,7 +3556,7 @@ proof(intro allI ballI impI, elim conjE)
          (\<exists>J\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n'').
              i \<in> J \<and>
              priority_JS_based_execution bs Cs S JS I (Suc n'') =
-             sem_lifted (map_comprehension (\<lambda>i. if_then (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n'')))" by auto
+             sem_lifted (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n'')))" by auto
     have "n = Suc m \<or> n\<noteq>Suc m" by auto
     then show ?case 
     proof
@@ -3566,7 +3566,7 @@ proof(intro allI ballI impI, elim conjE)
       assume "n \<noteq> Suc m"
       with Suc have "n \<le> m" by auto
       with Suc have H:"priority_JS_based_execution bs Cs S JS I m i = priority_JS_based_execution bs Cs S JS I n i" by auto
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"priority_JS_based_execution bs Cs S JS I (Suc m) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (priority_JS_based_execution bs Cs S JS I m)"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"priority_JS_based_execution bs Cs S JS I (Suc m) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (priority_JS_based_execution bs Cs S JS I m)"
                                                                            and jinJS:"J' \<in> JS m (priority_JS_based_execution bs Cs S JS I m)" by blast
       show ?case
       proof (rule ccontr)
@@ -4670,7 +4670,7 @@ lemma all_programs_reexecuted_or_dead:
     and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
   shows "\<forall>i\<in>I. \<forall>n. \<not>(holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n i)) \<longrightarrow> 
       (\<exists>n'\<ge>n. (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
 proof (intro allI ballI impI)
   fix i n
   assume asm1:"i\<in>I"
@@ -4681,19 +4681,19 @@ proof (intro allI ballI impI)
   from asm1 H assms(2) obtain n' where "(n'\<ge>n)" and  n'prop:"((qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
     by auto
   have "(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))
         \<or> \<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     by auto
   thus "(\<exists>n'\<ge>n. (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
   proof
     assume "(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     thus ?thesis by auto
   next
     assume asm:"\<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     from \<open>n'\<ge>n\<close> asm state_preservation[of n n' JS bs Cs S I i] JS_nonempty have "(priority_JS_based_execution bs Cs S JS I n') i = (priority_JS_based_execution bs Cs S JS I n) i"
       by blast
     with asm2 have H2:"\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)" by auto
@@ -4703,26 +4703,26 @@ proof (intro allI ballI impI)
     with assms(1) asm1 obtain n'' where "(n''\<ge>n')" and n''prop:"(holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i\<in>J)"
       by blast
     have "(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))
       \<or> \<not>(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
     by auto
     thus ?thesis 
     proof
       assume "(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
       thus ?thesis using \<open>n \<le> n'\<close>
         by (meson dual_order.trans)
     next
       assume asm:"\<not>(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
       from \<open>n''\<ge>n'\<close>  asm state_preservation[of n' n'' JS bs Cs S I i] JS_nonempty have spres:"\<forall>n. n'\<le>n \<and> n \<le> n'' \<longrightarrow> (priority_JS_based_execution bs Cs S JS I n) i = (priority_JS_based_execution bs Cs S JS I n') i"
         by blast
       with \<open>n' \<le> n''\<close> have "(priority_JS_based_execution bs Cs S JS I n'') i = (priority_JS_based_execution bs Cs S JS I n') i"
         by blast
       with H2 have H4:"\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)" by auto
       with n''prop have H3:"(\<exists>J\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J)" by auto
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J''] (priority_JS_based_execution bs Cs S JS I n'')"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (priority_JS_based_execution bs Cs S JS I n'')"
                                                                      and jinJS:"J'' \<in> JS n''(priority_JS_based_execution bs Cs S JS I n'')" 
                                                                      and priorJS:"qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'')) \<in> J''
                                                                           \<or> (\<forall>J'' \<in> JS n''(priority_JS_based_execution bs Cs S JS I n''). qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'')) \<notin>J'')"
@@ -4748,7 +4748,7 @@ proof (intro allI ballI impI)
             by (metis le_refl lessI nless_le)
           from Suc have "\<forall>n. n' \<le> n \<and> n \<le> n'' \<longrightarrow> priority_JS_based_execution bs Cs S JS I n i = priority_JS_based_execution bs Cs S JS I n' i"
             by (meson le_imp_less_Suc nless_le)
-          moreover from Suc have "\<not> (\<exists>n'''\<ge>n'. n''' < n'' \<and>(\<exists>J\<in>JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted (map_comprehension (\<lambda>i. if_then (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n''')))" 
+          moreover from Suc have "\<not> (\<exists>n'''\<ge>n'. n''' < n'' \<and>(\<exists>J\<in>JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n''')))" 
             using less_SucI by presburger
           moreover from nseq Suc have "\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)"
             by presburger
@@ -4771,7 +4771,7 @@ proof (intro allI ballI impI)
             have jin:"?J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n'')" 
               apply(simp only:eq2) 
               using JS_nonempty priority_picker_inJS by metis
-            have step:"(priority_JS_based_execution bs Cs S JS I (Suc n'')) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> ?J] (priority_JS_based_execution bs Cs S JS I n'')"
+            have step:"(priority_JS_based_execution bs Cs S JS I (Suc n'')) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J] (priority_JS_based_execution bs Cs S JS I n'')"
               apply(simp only: eq2[symmetric]) unfolding priority_JS_based_execution_def
               using Haux
               by(auto simp add:Let_def)
@@ -4825,7 +4825,7 @@ abbreviation can_step_subset_or_all_finished3 where
 
 
 theorem while_nonfixed_alignment7:
-  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V n J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V n J)} [[i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after3 n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs (V n))"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
@@ -4835,7 +4835,7 @@ theorem while_nonfixed_alignment7:
  *)
 
 theorem while_nonfixed_alignment6:
-  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+  assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
       and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs V)"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
@@ -4890,7 +4890,7 @@ proof(intro relational_hyper_hoare_tripleI)
         by (metis assms(4) relational_hyper_hoare_tripleE)
     next
       case (Suc n)
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                            and jinJS:"J' \<in> JS n (?Ss n)" by blast
       have jin:"J' \<in> Pow I - {{}}" using jinJS JS_subset[of "n" "?Ss n"]
         by blast
@@ -4900,7 +4900,7 @@ proof(intro relational_hyper_hoare_tripleI)
         assume asm1: "((Iv n) (?Ss n) \<and> \<not>holds_forall_hyper I (lnot_hyper bs) (?Ss n))"
         with JS_prop jinJS have vj:"(V J') (?Ss n)"
           by (metis disj_def)
-        have "\<Turnstile> {conj (Iv n) (V J')} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J']] {Iv (Suc n)}"
+        have "\<Turnstile> {conj (Iv n) (V J')} [[i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J']] {Iv (Suc n)}"
           using assms(1) jin by auto
         with asm1 vj have H:"Iv (Suc n) (?Ss (Suc n))" unfolding relational_hyper_hoare_triple_def conj_def 
           by (simp add: eq)
@@ -4914,8 +4914,8 @@ proof(intro relational_hyper_hoare_tripleI)
           apply(simp only:eq)
           apply(rule)
           using asm2 jin
-          apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def holds_forall_hyper_def lnot_hyper_def)
-          apply (metis SemAssume SemIf2 lnot_def snd_conv subsetD)
+          apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def holds_forall_hyper_def lnot_hyper_def)
+          apply (metis SemSeq SemSkip SemAssume SemIf2 lnot_def snd_conv subsetD)
           by (metis in_mono snd_eqD)
         then show ?case using Suc asm2 by auto
       qed
@@ -4940,7 +4940,7 @@ proof(intro relational_hyper_hoare_tripleI)
       next
         case (Suc n)
         from Suc obtain n' where H:"(?Ss n) i  = ((?after_n) n') i" by blast
-        from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+        from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                            and jinJS:"J' \<in> JS n (?Ss n)" by blast
         have "i \<notin> J' \<or> i \<in> J'" by auto
         then show ?case 
@@ -4998,7 +4998,7 @@ proof(intro relational_hyper_hoare_tripleI)
           then show ?case by blast
         next 
           assume asm: "i \<in> I"
-          from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+          from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                              and jinJS:"J' \<in> JS n (?Ss n)" by blast
           have H1:"(\<forall>i\<in>I. \<forall>n. (\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J)))" 
           proof (intro allI ballI)
@@ -5040,7 +5040,7 @@ proof(intro relational_hyper_hoare_tripleI)
               thus ?thesis by auto
             qed
           qed
-          let ?executes = "(\<lambda>n'. \<lambda>i. \<lambda>JS. (\<exists>J' \<in> JS n' (?Ss n'). (i \<in> J') \<and> (?Ss (Suc n') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n'))))"
+          let ?executes = "(\<lambda>n'. \<lambda>i. \<lambda>JS. (\<exists>J' \<in> JS n' (?Ss n'). (i \<in> J') \<and> (?Ss (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n'))))"
           from H1 all_q_revisited[of I bs Cs S JS] all_programs_reexecuted_or_dead[of I bs Cs S JS] JS_nonempty \<open>I \<noteq> {}\<close>
               have "\<forall>n. \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss n) i)) 
             \<or> (\<exists>n' \<ge> n. ?executes n' i JS)" by (smt (z3))
@@ -5067,8 +5067,8 @@ proof(intro relational_hyper_hoare_tripleI)
             with H have "(holds_forall (lnot (bs i)) ((?after_n n) i))"
               by simp
             from this have "((?after_n (Suc n)) i) = ((?after_n n) i)" 
-              apply(auto simp add:holds_forall_def lnot_def sem_lifted_def map_comprehension_def sem_def if_then_def)
-              by (metis SemAssume SemIf2 lnot_def snd_conv)
+              apply(auto simp add:holds_forall_def lnot_def sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def)
+              by (metis SemSkip SemSeq SemAssume SemIf2 lnot_def snd_conv)
             with H show ?case
               by auto
           next
@@ -5089,7 +5089,7 @@ proof(intro relational_hyper_hoare_tripleI)
                 then show ?case by auto
               next
                 case (Suc n''')
-                from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"?Ss (Suc n''') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J''] (?Ss n''')"
+                from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"?Ss (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n''')"
                                                                                    and jinJS:"J'' \<in> JS n''' (?Ss n''')" by blast
                 from Suc no_less have H1:"\<not>(?executes n''' i JS)" 
                   by (simp add: less_eq_Suc_le)
@@ -5106,7 +5106,7 @@ proof(intro relational_hyper_hoare_tripleI)
             qed
             from i_exec obtain J'' where "J''\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n'')"
                                       and iinJ'':"i \<in> J''"
-                                      and eq:"?Ss (Suc n'') = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J''] (?Ss n'')"
+                                      and eq:"?Ss (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n'')"
               by blast
             have "(?after_n (Suc n)) i = (?Ss (Suc n'')) i"
               apply(simp only:eq)
@@ -5157,7 +5157,7 @@ proof(intro relational_hyper_hoare_tripleI)
       case (SemWhileIter \<sigma> \<sigma>' \<sigma>'')
       have H1:"(l, \<sigma>') \<in> sem_lifted_after_n_steps bs Cs S I (Suc 0) i" 
         using \<open>i \<in> I\<close> \<open>\<langle>Assume (bs i) ;; Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'\<close>
-        apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def)
+        apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def)
         by (meson SemIf1 SemWhileIter.hyps(1) SemWhileIter.prems(2))
       have H2:"\<And>n n' s. s \<in> sem_lifted_after_n_steps bs Cs (sem_lifted_after_n_steps bs Cs S I (Suc 0)) I n i 
               \<longrightarrow> s \<in> sem_lifted_after_n_steps bs Cs S I (Suc n) i" 
@@ -5166,15 +5166,15 @@ proof(intro relational_hyper_hoare_tripleI)
       proof -
         fix n a b
         assume asm1: "i \<in> I"
-        assume asm2: "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then (bs i) (Cs i)) else None) S) I n i"
-        from asm1 asm2 show "(a, b) \<in> sem (if_then (bs i) (Cs i)) (sem_lifted_after_n_steps bs Cs S I n i)"
+        assume asm2: "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I n i"
+        from asm1 asm2 show "(a, b) \<in> sem (if_then_else_skip (bs i) (Cs i)) (sem_lifted_after_n_steps bs Cs S I n i)"
         proof (induction n arbitrary: b )
           case 0
           then show ?case 
             by(auto simp add:sem_lifted_def)
         next
           case (Suc n)
-          hence "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then (bs i) (Cs i)) else None) S) I (Suc n) i" by auto
+          hence "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I (Suc n) i" by auto
           from this show ?case 
             using Suc
             apply(auto simp add:sem_lifted_def map_comprehension_def sem_def)
@@ -5203,16 +5203,16 @@ proof(intro relational_hyper_hoare_tripleI)
       case (Suc n)
       have "\<And>C s s' s''. \<langle>While C, s\<rangle> \<rightarrow> s' \<and> \<langle>C,s'\<rangle> \<rightarrow> s'' \<Longrightarrow> \<langle>While C, s\<rangle> \<rightarrow> s''"
         using while_iter_reversed by auto
-      obtain \<sigma>'' where "(l, \<sigma>'') \<in> sem_lifted_after_n_steps bs Cs S I n i" and ifte:"\<langle>if_then (bs i) (Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
+      obtain \<sigma>'' where "(l, \<sigma>'') \<in> sem_lifted_after_n_steps bs Cs S I n i" and ifte:"\<langle>if_then_else_skip (bs i) (Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
         using \<open>(l, \<sigma>') \<in> sem_lifted_after_n_steps bs Cs S I (Suc n) i\<close> \<open>i\<in>I\<close>
         by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
       with Suc obtain \<sigma> where \<sigma>_obt: "(l, \<sigma>) \<in> S i \<and> \<langle>While (Assume (bs i) ;; Cs i), \<sigma>\<rangle> \<rightarrow> \<sigma>''"
         by blast
      have H:"\<not> bs i \<sigma>'' \<Longrightarrow> \<sigma>'' = \<sigma>'"
        using ifte
-       by(auto simp add:if_then_def)
+       by(auto simp add:if_then_else_skip_def if_then_else_def)
      from ifte have "\<langle>(Assume (bs i) ;; Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>' \<or> \<not> bs i \<sigma>''"
-       by(auto simp add:if_then_def lnot_def)
+       by(auto simp add:if_then_else_skip_def if_then_else_def lnot_def)
      then show ?case 
      proof
        assume "\<langle>(Assume (bs i) ;; Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
@@ -5241,18 +5241,18 @@ proof(intro relational_hyper_hoare_tripleI)
   proof(intro hyper_ascendingI hyper_set_leI)
     fix n i
     assume "i\<in>I"
-    from priority_JS_based_execution_step obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+    from priority_JS_based_execution_step obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
       by blast
     show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I n) i
            \<subseteq> sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I (Suc n)) i"
       using \<open>i \<in> I\<close>
       apply(simp only:eq)
-      apply(auto simp add:sem_lifted_def sem_def map_comprehension_def lnot_def if_then_def)
-      by (metis SemAssume SemIf2 lnot_def)
+      apply(auto simp add:sem_lifted_def sem_def map_comprehension_def lnot_def if_then_else_skip_def if_then_else_def)
+      by (metis SemSkip SemSeq SemAssume SemIf2 lnot_def)
   next
     fix n i
     assume "i \<notin> I"
-    from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+    from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                           and jinJS:"J' \<in> JS n (?Ss n)"
       by blast
     from \<open>i\<notin>I\<close> priority_picker_inJS JS_nonempty
@@ -5285,7 +5285,7 @@ theorem while_nonfixed_alignment5:
     shows   "\<Turnstile> { (Iv 0) } [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj Q_inf (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
   let ?V' = "\<lambda>J. conj (holds_for_prog_set J bs) (V J)"
-  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (?V' J)} [[i \<mapsto> if_then (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
+  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (?V' J)} [[i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
   proof (intro allI ballI relational_hyper_hoare_tripleI)
     fix n J S
     assume asm1: "J \<in> Pow I - {{}}"
@@ -5293,13 +5293,13 @@ proof -
     with asm1 asm2 assms(1) have H:"Iv (Suc n) (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)" 
       unfolding relational_hyper_hoare_triple_def
       by blast
-    have "(sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] S) = (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)"
+    have "(sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S) = (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)"
       apply(rule)
       using asm2
-      apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_def lnot_def conj_def holds_for_prog_set_def holds_forall_hyper_def)
+      apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def conj_def holds_for_prog_set_def holds_forall_hyper_def)
        apply fastforce
       by (metis SemAssume SemIf1 SemSeq snd_conv)
-    with H show "Iv (Suc n) (sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] S)" by auto
+    with H show "Iv (Suc n) (sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S)" by auto
   qed
   moreover have "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs ?V')" using assms(2) by simp
   moreover have "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs ?V')" using assms(3) by simp
@@ -5602,17 +5602,17 @@ qed
 
 
 lemma if_then_trueE:
-  assumes "b \<sigma>" and "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  assumes "b \<sigma>" and "\<langle>if_then_else_skip b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
   shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
   using assms
-  unfolding if_then_def lnot_def
+  unfolding if_then_else_skip_def if_then_else_def lnot_def
   by auto
 
 lemma if_then_falseE:
-  assumes "\<not> b \<sigma>" and "\<langle>if_then b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  assumes "\<not> b \<sigma>" and "\<langle>if_then_else_skip b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
   shows "\<sigma>' = \<sigma>"
   using assms
-  unfolding if_then_def lnot_def
+  unfolding if_then_else_skip_def if_then_else_def lnot_def
   by auto
 
 lemma if_then_else_skip_falseE:
@@ -5661,14 +5661,14 @@ qed
 
 
 
-lemma if_repeat_id: "sem (if_then b (repeat_with_if r b C)) = sem (repeat_with_if r b C)"
+lemma if_repeat_id: "sem (if_then_else_skip b (repeat_with_if r b C)) = sem (repeat_with_if r b C)"
 proof (rule ext)
   fix S
-  show "sem (if_then b (repeat_with_if r b C)) S = sem (repeat_with_if r b C) S"
+  show "sem (if_then_else_skip b (repeat_with_if r b C)) S = sem (repeat_with_if r b C) S"
   proof (auto simp: sem_def)
     fix l \<sigma> \<sigma>'
     assume HS: "(l, \<sigma>) \<in> S"
-       and H:  "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+       and H:  "\<langle>if_then_else_skip b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
     show "\<exists>\<sigma>0. (l, \<sigma>0) \<in> S \<and> \<langle>repeat_with_if r b C, \<sigma>0\<rangle> \<rightarrow> \<sigma>'"
     proof (cases "b \<sigma>")
       case True
@@ -5686,21 +5686,21 @@ proof (rule ext)
     fix l \<sigma> \<sigma>'
     assume HS: "(l, \<sigma>) \<in> S"
        and H:  "\<langle>repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-    show "\<exists>\<sigma>0. (l, \<sigma>0) \<in> S \<and> \<langle>if_then b (repeat_with_if r b C), \<sigma>0\<rangle> \<rightarrow> \<sigma>'"
+    show "\<exists>\<sigma>0. (l, \<sigma>0) \<in> S \<and> \<langle>if_then_else_skip b (repeat_with_if r b C), \<sigma>0\<rangle> \<rightarrow> \<sigma>'"
     proof (cases "b \<sigma>")
       case True
       have "\<langle>Assume b ;; repeat_with_if r b C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
         using True H by (meson SemAssume SemSeq)
-      hence "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-        unfolding if_then_def by (rule SemIf1)
+      hence "\<langle>if_then_else_skip b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        unfolding if_then_else_skip_def if_then_else_def by (rule SemIf1)
       with HS show ?thesis by blast
     next
       case False
       from repeat_with_if_false_only[OF False H] have "\<sigma>' = \<sigma>" .
       hence "\<langle>Assume (lnot b), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
         using False unfolding lnot_def by (auto intro: SemAssume)
-      hence "\<langle>if_then b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-        unfolding if_then_def
+      hence "\<langle>if_then_else_skip b (repeat_with_if r b C), \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+        unfolding if_then_else_skip_def if_then_else_def
         by (simp add: SemIf2 SemSeq SemSkip)
       with HS show ?thesis by blast
     qed
@@ -5719,19 +5719,19 @@ proof -
   let ?V = "\<lambda>J. if J = I then (\<lambda>S. True) else (\<lambda>S. False)"
   let ?Iv2 = "\<lambda>n. Iv"
   let ?Cs2 = "\<lambda>i. repeat_with_if (rf i) (bs i) (Cs i)"
-  have "\<And>S. sem_lifted [i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I] S = sem_lifted [i \<mapsto> if_then (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I] S"
+  have "\<And>S. sem_lifted [i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I] S = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I] S"
     apply(rule)
     apply(auto simp add:sem_lifted_def map_comprehension_def) using if_repeat_id assms(2)
      apply metis
     by (simp add: assms(2) if_repeat_id)
-  with assms(1) have H:"\<Turnstile> { Iv } [[i \<mapsto> if_then (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I]] { Iv }"
+  with assms(1) have H:"\<Turnstile> { Iv } [[i \<mapsto> if_then_else_skip (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I]] { Iv }"
     by (meson rewrite_rule sem_equiv_hyper_def)
-  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
+  have "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then_else_skip (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
   proof (intro allI ballI)
     fix n J
     assume "J \<in> Pow I - {{}}"
     hence "J = I \<or> J \<noteq> I" by auto
-    thus "\<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
+    thus "\<Turnstile> { conj (?Iv2 n) (?V J)} [[i \<mapsto> if_then_else_skip (bs i) (?Cs2 i) | i \<in> J]] { ?Iv2 (Suc n) }"
     proof 
       assume asm:"J = I"
       show ?thesis 
