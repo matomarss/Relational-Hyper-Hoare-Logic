@@ -3330,6 +3330,8 @@ theorem while_nonfixed_alignment2:
 abbreviation all_unfinished_can_be_stepped_after where
 "all_unfinished_can_be_stepped_after n Iv I bs V S \<equiv> (\<forall>i\<in>I. \<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S. \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> (conj (holds_for_prog_set J bs) (V J) S)))))" 
 
+abbreviation all_unfinished_can_be_stepped_after' where
+"all_unfinished_can_be_stepped_after' (n::nat) Iv I bs V \<equiv> \<forall>i\<in>I. \<exists>n'\<ge>n. (entails (Iv n') (disj (\<lambda>S. (holds_forall (lnot (bs i)) (S i))) (disj_I ({J . J \<in> Pow I \<and> i \<in> J}) (\<lambda>J. conj (holds_for_prog_set J bs) (V J)))))" 
 
 (*theorem while_nonfixed_alignment4:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
@@ -3340,12 +3342,35 @@ abbreviation all_unfinished_can_be_stepped_after where
 
 *)
 
+
+abbreviation all_unfinished_can_be_stepped_after2' where
+"all_unfinished_can_be_stepped_after2' (n::nat) Iv I bs V \<equiv> \<forall>i\<in>I. \<exists>n'\<ge>n. (entails (Iv n') (disj (\<lambda>S. (holds_forall (lnot (bs i)) (S i))) (disj_I ({J . J \<in> Pow I \<and> i \<in> J}) (\<lambda>J. V J))))" 
+
+
+
 abbreviation all_unfinished_can_be_stepped_after2 where
 "all_unfinished_can_be_stepped_after2 n Iv I bs V S \<equiv> (\<forall>i\<in>I. (\<exists>n'\<ge>n.(entails (Iv n') (\<lambda>S.  \<not>(holds_forall (lnot (bs i)) (S i)) \<longrightarrow> (\<exists>J\<in>(Pow I). i\<in>J \<and> ((V J) S))))))" 
 
+
+
+lemma 
+  "\<forall>n::nat. all_unfinished_can_be_stepped_after2' n Iv I bs V \<Longrightarrow> \<forall>n::nat. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
+  unfolding entails_def disj_I_def disj_def
+  apply(auto)
+  by (meson PowI)
+
+lemma
+  assumes "\<forall>n::nat. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
+      and "\<forall>n::nat. \<exists>S. (Iv n) S"
+    shows "\<forall>n::nat. all_unfinished_can_be_stepped_after2' n Iv I bs V "
+  using assms
+  unfolding entails_def disj_I_def disj_def
+  apply(auto)
+  by (meson Pow_iff)
+
+
 abbreviation can_step_subset_or_all_finished2 where
 "can_step_subset_or_all_finished2 I bs V \<equiv> (disj (disj_I (Pow I - {{}}) (\<lambda>J. V J)) (holds_forall_hyper I (lnot_hyper bs)))"
-
 
 fun sem_lifted_stacked where
 "sem_lifted_stacked bs Cs S Js 0 = S" |
@@ -4871,7 +4896,7 @@ theorem while_nonfixed_alignment7:
 
 theorem while_nonfixed_alignment6:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (V J)} [[i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]] { Iv (Suc n) }"
-      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs V)"
+      and   "\<forall>n. (all_unfinished_can_be_stepped_after2' n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs V)"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
       and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
@@ -5043,8 +5068,10 @@ proof(intro relational_hyper_hoare_tripleI)
             thus "(\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J))"
             proof 
               assume "Iv n (?Ss n)"
-              with \<open>i\<in>I\<close> assms(2) have "\<exists>n'\<ge>n. entails (Iv n') (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> V J S))"
-                by (smt (verit, del_insts) entails_def)
+              with \<open>i\<in>I\<close> assms(2) have "\<exists>n'\<ge>n. entails (Iv n') (\<lambda>S. holds_forall (lnot (bs i)) (S i) \<or> (\<exists>J\<in>{J \<in> Pow I. i \<in> J}. V J S))"
+                unfolding disj_def disj_I_def by auto
+              hence "\<exists>n'\<ge>n. entails (Iv n') (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> V J S))"
+                by (smt (verit) entailsE entailsI mem_Collect_eq)
               from this obtain n' where "n'\<ge>n" and entn':"entails (Iv n') (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> V J S))" by blast
               from jsexec_ivq have "(Iv n' (?Ss n') \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss n'))" by auto
               thus ?thesis 
@@ -5312,7 +5339,7 @@ qed
 
 theorem while_nonfixed_alignment5:
   assumes   "\<forall>n. \<forall>J\<in>(Pow I - {{}}). \<Turnstile> { conj (Iv n) (conj (holds_for_prog_set J bs) (V J))} [[i \<mapsto> Cs i | i \<in> J]] { Iv (Suc n) }"
-      and   "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after n Iv I bs V)"
+      and   "\<forall>n. (all_unfinished_can_be_stepped_after' n Iv I bs V)"
       and   "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished I bs V)"
       and   "\<forall>n. \<Turnstile> { (Iv n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
       and   "relational_upwards_closed I (\<lambda>n. Q) Q_inf"
@@ -5336,7 +5363,7 @@ proof -
       by (metis SemAssume SemIf1 SemSeq snd_conv)
     with H show "Iv (Suc n) (sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S)" by auto
   qed
-  moreover have "\<forall>n. entails (Iv n) (all_unfinished_can_be_stepped_after2 n Iv I bs ?V')" using assms(2) by simp
+  moreover have "\<forall>n. (all_unfinished_can_be_stepped_after2' n Iv I bs ?V')" using assms(2) by simp
   moreover have "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs ?V')" using assms(3) by simp
   ultimately show ?thesis using assms while_nonfixed_alignment6[where ?V="?V'"] by auto
 qed
@@ -5387,8 +5414,9 @@ proof -
     moreover from assms(2) can_step_any_unfinished_can_step_subset_or_all_finished 
         have  "\<And>n. entails (?Iv' n) (can_step_subset_or_all_finished I bs V)"
           by blast
-    moreover from assms(2) have "\<And>n. entails (?Iv' n) (all_unfinished_can_be_stepped_after n ?Iv' I bs V)"
-          by (smt (verit, del_insts) entailsE entailsI order_refl)
+        moreover from assms(2) have "\<And>n. (all_unfinished_can_be_stepped_after' n ?Iv' I bs V)"
+          unfolding disj_def disj_I_def
+          by (smt (verit, ccfv_threshold) entailsE entailsI mem_Collect_eq order_refl)
     moreover from assms(3) have "\<And>n. \<Turnstile> { (?Iv' n) } [[i \<mapsto> Assume (lnot (bs i)) | i \<in> I]] { Q }"
       by auto
     moreover from assms(4) have "relational_upwards_closed I (\<lambda>n. Q) Q" by blast
@@ -5779,14 +5807,17 @@ proof -
         by (simp add: conj_def relational_hyper_hoare_triple_def)
     qed
   qed
-  moreover have "\<forall>n::nat. entails (?Iv2 n) (all_unfinished_can_be_stepped_after2 n ?Iv2 I bs ?V)" 
+  moreover have "\<forall>n::nat. (all_unfinished_can_be_stepped_after2' n ?Iv2 I bs ?V)" 
     apply(intro allI entailsI ballI conjI impI entailsI)
   proof 
     fix n::nat
-    fix S i
+    fix i
     assume asm:"i \<in> I"
     show "n \<le> n  \<and>
-            entails Iv (\<lambda>S. \<not> holds_forall (lnot (bs i)) (S i) \<longrightarrow> (\<exists>J\<in>Pow I. i \<in> J \<and> (if J = I then \<lambda>S. True else (\<lambda>S. False)) S))"
+            entails Iv
+            (Logic.disj (\<lambda>S. holds_forall (lnot (bs i)) (S i))
+              (disj_I {J \<in> Pow I. i \<in> J} (\<lambda>J. if J = I then \<lambda>S. True else (\<lambda>S. False))))"
+      unfolding disj_def disj_I_def
       apply(auto)
       apply(intro entailsI) using asm by auto
   qed
@@ -7331,38 +7362,50 @@ proof -
           qed
         next
           (*Step 4.2*)
-          show "\<forall>n. entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)" 
+          show "\<forall>n. (all_unfinished_can_be_stepped_after' n ?Iv {0,1} ?conds ?V)" 
           proof
             fix n::nat
             from bigger_prime obtain n' where "n \<le> n'" and "prime n'" 
               using order_less_imp_le by blast
-            show "entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)"
+            show "(all_unfinished_can_be_stepped_after' n ?Iv {0,1} ?conds ?V)"
+            unfolding disj_def disj_I_def
             proof(intro allI ballI impI entailsI conjI exI)
               from \<open>n \<le> n'\<close> show "n \<le> n'" by auto
             next
-              fix S 
               fix i'::nat
-              fix S'
-              assume "?Iv n S" and "?Iv n' S'" and "i' \<in> {0,1}" and hfa:"\<not> holds_forall (lnot (\<lambda>s. 0 < s i)) (S' i')"
+              fix S'::"(nat \<Rightarrow> ((nat \<Rightarrow> nat) \<times> (nat \<Rightarrow> nat)) set)"
+              assume "i' \<in> {0,1}" and "?Iv n' S'" 
+              show "holds_forall (lnot (\<lambda>s. 0 < s i)) (S' i') \<or>
+            (\<exists>ia\<in>{J \<in> Pow {0, 1}. i' \<in> J}.
+                Logic.conj (holds_for_prog_set ia (\<lambda>j s. 0 < s i))
+                 (if ia = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)
+                  else if ia = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False))
+                 S')"
+                apply(subst disj_imp)
+                apply(intro impI)
+              proof -
+              assume hfa:"\<not> holds_forall (lnot (\<lambda>s. 0 < s i)) (S' i')"
               from \<open>?Iv n' S'\<close> hfa have H1: "(holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i)) S'" 
                 unfolding holds_for_prog_set_def holds_forall_def lnot_def holds_forall_hyper_def
                 using \<open>i' \<in> {0, 1}\<close>
                 by (metis empty_iff insert_iff)
               from \<open>?Iv n' S'\<close>  \<open>prime n'\<close> have H2: "\<forall>\<sigma>1\<in>S' 1. prime (snd \<sigma>1 c)" by fastforce
-              show "\<exists>J\<in>Pow {0, 1}. i' \<in> J \<and> conj (holds_for_prog_set J (\<lambda>j s. 0 < s i))
-                (if J = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)
-                 else if J = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False))
-                  S'"
-              proof 
-                show "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i))
+              show "(\<exists>ia\<in>{J \<in> Pow {0, 1}. i' \<in> J}.
+                Logic.conj (holds_for_prog_set ia (\<lambda>j s. 0 < s i))
+                 (if ia = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c)
+                  else if ia = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False))
+                 S')" 
+              proof -
+                have "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. 0 < s i))
                 (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. prime (snd \<sigma>1 c) else if {0,1} = {1} then \<lambda>S. \<forall>\<sigma>1\<in>S 1. \<not> prime (snd \<sigma>1 c) else (\<lambda>S. False)) S'"
                   using H1 H2 \<open>i' \<in> {0,1}\<close>
                   by(auto simp add:conj_def)
-              next
-                show "{0, 1} \<in> Pow {0, 1} " by auto
+                thus ?thesis
+                  by blast
               qed
             qed
           qed
+        qed
         next
           (*Step 4.3*)
           show "\<forall>n. entails (?Iv n) (can_step_subset_or_all_finished {0,1} ?conds ?V)" 
@@ -10868,38 +10911,50 @@ proof -
       qed
     qed
   next
-    show "\<forall>n. entails (?Iv n) (all_unfinished_can_be_stepped_after n ?Iv {0,1} ?conds ?V)" 
+    show "\<forall>n. (all_unfinished_can_be_stepped_after' n ?Iv {0,1} ?conds ?V)" 
     proof
       fix m::nat
       from bigger_prime obtain m' where "m \<le> m'" and "prime m'" 
         using order_less_imp_le by blast
-      show "entails (?Iv m) (all_unfinished_can_be_stepped_after m ?Iv {0,1} ?conds ?V)"
+      show "(all_unfinished_can_be_stepped_after' m ?Iv {0,1} ?conds ?V)"
+        unfolding disj_def disj_I_def
       proof(intro allI ballI impI entailsI conjI exI)
         from \<open>m \<le> m'\<close> show "m \<le> m'" by auto
       next
-        fix S 
         fix i'::nat
-        fix S'
-        assume "?Iv m S" and "?Iv m' S'" and "i' \<in> {0,1}" and hfa:"\<not> holds_forall (lnot (\<lambda>s. s i < s n)) (S' i')"
+        fix S'::"nat hyper_set"
+        assume "?Iv m' S'" and "i' \<in> {0, 1}"
+        show "(holds_forall (lnot (\<lambda>s. s i < s n))) (S' i') \<or>
+            (\<exists>ia\<in>{J \<in> Pow {0, 1}. i' \<in> J}.
+                Logic.conj (holds_for_prog_set ia (\<lambda>j s. s i < s n))
+                 (if ia = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c)
+                  else if ia = {0} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False))
+                 S')"
+          apply(subst disj_imp)
+          apply(intro impI)
+        proof -
+        assume hfa:"\<not> holds_forall (lnot (\<lambda>s. s i < s n)) (S' i')"
         from \<open>?Iv m' S'\<close> hfa have H1: "(holds_for_prog_set {0,1} (\<lambda>j s. s i < s n)) S'" 
           unfolding holds_for_prog_set_def holds_forall_def lnot_def holds_forall_hyper_def
           using \<open>i' \<in> {0, 1}\<close>
           by (metis empty_iff insert_iff)
         from \<open>?Iv m' S'\<close>  \<open>prime m'\<close> have H2: "\<forall>\<sigma>0\<in>S' 0. prime (snd \<sigma>0 c)" by fastforce
-        show "\<exists>J\<in>Pow {0, 1}. i' \<in> J \<and> conj (holds_for_prog_set J (\<lambda>j s. s i < s n))
-          (if J = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c)
-           else if J = {0} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False))
-            S'"
-        proof 
-          show "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. s i < s n))
+        show "\<exists>ia\<in>{J \<in> Pow {0, 1}. i' \<in> J}.
+       Logic.conj (holds_for_prog_set ia (\<lambda>j s. s i < s n))
+        (if ia = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c)
+         else if ia = {0} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False))
+        S'"
+        proof -
+          have "i' \<in> {0,1} \<and> conj (holds_for_prog_set {0,1} (\<lambda>j s. s i < s n))
           (if {0,1} = {0, 1} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. prime (snd \<sigma>0 c) else if {0,1} = {0} then \<lambda>S. \<forall>\<sigma>0\<in>S 0. \<not> prime (snd \<sigma>0 c) else (\<lambda>S. False)) S'"
             using H1 H2 \<open>i' \<in> {0,1}\<close>
             by(auto simp add:conj_def)
-        next
-          show "{0, 1} \<in> Pow {0, 1} " by auto
+          thus ?thesis
+            by blast
         qed
       qed
     qed
+  qed
   next
     show "\<forall>n. entails (?Iv n) (can_step_subset_or_all_finished {0,1} ?conds ?V)" 
     proof(intro allI entailsI)
