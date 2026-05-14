@@ -230,16 +230,15 @@ lemma relational_hyper_hoare_tripleE:
   by (meson assms(1) assms(2) relational_hyper_hoare_triple_def)
 
 
-definition split_with_b :: "(nat, 'a) bexp \<Rightarrow> nat \<Rightarrow> 'a syn_assertion \<Rightarrow> 'a rel_hyper_assertion"
-  where
-  "split_with_b b k P = conj (interp_assert (split k P)) (\<lambda>S. \<forall>\<phi> \<in> S k. b (snd \<phi>) \<and> (\<forall>\<phi> \<in> S (Suc k). \<not> b (snd \<phi>)))"
 
+
+(*
 fun programs_if :: "'a hyper_program \<Rightarrow> (nat, 'a) stmt \<Rightarrow> (nat, 'a) stmt \<Rightarrow> 'a hyper_program"
   where
   "programs_if Cs C1 C2 0 = Some C1"
 | "programs_if Cs C1 C2 (Suc 0) = Some C2"
 | "programs_if Cs C1 C2 (Suc (Suc n)) = Cs (Suc n)"
-
+*)
 
 lemma set_filter_lnot:
   "S = Set.filter (b \<circ> snd) S \<union> Set.filter (lnot b \<circ> snd) S"
@@ -248,35 +247,24 @@ lemma set_filter_lnot:
    apply (simp add: subsetI)
   by (simp add: Set.filter_def)
 
-(* Shift... ? *)
-fun post_if_rel where
-  "post_if_rel (AConst b) = AConst b"
-| "post_if_rel (AComp e1 cmp e2) = AComp e1 cmp e2"
-| "post_if_rel (AForallState 0 A) = AAnd (AForallState 0 (post_if_rel A)) (AForallState 1 (post_if_rel A))"
-| "post_if_rel (AForallState (Suc n) A) = AForallState (Suc (Suc n)) (post_if_rel A)"
-| "post_if_rel (AExistsState 0 A) = AOr (AExistsState 0 (post_if_rel A)) (AExistsState 1 (post_if_rel A))"
-| "post_if_rel (AExistsState (Suc n) A) = AExistsState (Suc (Suc n)) (post_if_rel A)"
-| "post_if_rel (AForall A) = AForall (post_if_rel A)"
-| "post_if_rel (AExists A) = AExists (post_if_rel A)"
-| "post_if_rel (AOr A B) = AOr (post_if_rel A) (post_if_rel B)"
-| "post_if_rel (AAnd A B) = AAnd (post_if_rel A) (post_if_rel B)"
 
-lemma post_if_rel_charact:
+
+
+lemma split_charact:
   assumes "is_split 0 old_sets new_sets" (* old_sets 0 = new_sets 0 \<union> new_sets 1 *)
-      and "sat_assertion vals states (post_if_rel Q) new_sets"
+      and "sat_assertion vals states (split 0 Q) new_sets"
     shows "sat_assertion vals states Q old_sets"
   using assms
-proof (induct arbitrary: vals states rule: post_if_rel.induct)
-  case (3 A)
+proof (induct arbitrary: vals states rule: split.induct)
+  case (7 A)
   then show ?case
-    apply (simp add: is_split_simpleE[OF 3(3)])
-    using 3(1)[OF 3(3), of vals] by blast
+    by (meson split_soundness)
 next
-  case (5 A)
+  case (8 A)
   then show ?case
-    apply (simp add: is_split_simpleE[OF 5(3)])
-    using 5(1)[OF 5(3), of vals] by blast
-qed (auto simp add: is_split_largerE)
+    by (meson split_soundness)
+qed (auto)
+
 
 fun split_first_set where
   "split_first_set b S 0 = Set.filter (b \<circ> snd) (S 0)"
@@ -284,45 +272,73 @@ fun split_first_set where
 | "split_first_set b S (Suc (Suc n)) = S (Suc n)"
   
 lemma charact_split_first_set:
-  assumes "Cs 0 = Some (if_then_else b C1 C2)"
-  shows "is_split 0 (sem_lifted Cs S) (sem_lifted (programs_if Cs C1 C2) (split_first_set b S))"
+  shows "is_split 0 (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
   unfolding is_split_def sem_lifted_def apply simp
   apply (rule conjI)
-   apply (simp add: assms assume_sem if_then_else_def sem_if sem_seq)
-  by (metis Suc_lessD diff_Suc_Suc gr0_conv_Suc minus_nat.diff_0 programs_if.simps(3) split_first_set.simps(3) zero_less_diff)
+   apply (simp add:  assume_sem if_then_else_def sem_if sem_seq)
+  by (metis Suc_lessD diff_Suc_Suc gr0_conv_Suc minus_nat.diff_0 split_first_set.simps(3) zero_less_diff)
 
 
 lemma needed_for_soundness:
-  assumes "interp_assert (post_if_rel Q) (sem_lifted (programs_if Cs C1 C2) (split_first_set b S))"
-      and "Cs 0 = Some (if_then_else b C1 C2)"
-    shows "interp_assert Q (sem_lifted Cs S)"
+  assumes "interp_assert (split 0 Q) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
+    shows "interp_assert Q (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S)"
   using assms(1)
-  apply (rule post_if_rel_charact[rotated])
-  using assms(2) charact_split_first_set by blast
+  apply(auto)
+  apply (rule split_charact[rotated])
+  using charact_split_first_set apply(simp)
+  using charact_split_first_set
+  by (metis One_nat_def)
 
+fun split_at_zero where
+  "split_at_zero (AConst b) = AConst b"
+| "split_at_zero (AComp e1 cmp e2) = AComp e1 cmp e2"
+| "split_at_zero (AForallState 0 A) = AAnd (AForallState 0 (split_at_zero A)) (AForallState 1 (split_at_zero A))"
+| "split_at_zero (AForallState (Suc n) A) = AForallState (Suc (Suc n)) (split_at_zero A)"
+| "split_at_zero (AExistsState 0 A) = AOr (AExistsState 0 (split_at_zero A)) (AExistsState 1 (split_at_zero A))"
+| "split_at_zero (AExistsState (Suc n) A) = AExistsState (Suc (Suc n)) (split_at_zero A)"
+| "split_at_zero (AForall A) = AForall (split_at_zero A)"
+| "split_at_zero (AExists A) = AExists (split_at_zero A)"
+| "split_at_zero (AOr A B) = AOr (split_at_zero A) (split_at_zero B)"
+| "split_at_zero (AAnd A B) = AAnd (split_at_zero A) (split_at_zero B)"
 
+lemma split_zero_lemma: "split_at_zero P = split 0 P"
+proof (induction P)
+  case (AForallState x P)
+  then show ?case 
+  proof (cases x)
+    case 0
+    with AForallState show ?thesis by auto
+  next
+    case (Suc nat)
+    with AForallState show ?thesis by auto
+  qed
+next
+  case (AExistsState x P)
+  then show ?case 
+  proof (cases x)
+    case 0
+    with AExistsState show ?thesis by auto
+  next
+    case (Suc nat)
+    with AExistsState show ?thesis by auto
+  qed
+qed (auto)
 
-(*
-
-\<turnstile> { split_with_b b 0 P } C1::C2::Cs {interp_assert (post_if_rel Q)}
------------------------------------------------------------------------------
-\<turnstile> { P } (if b C1 C2)::Cs {Q}
-
-*)
-theorem rule_if_relational:
-  assumes "\<Turnstile> { split_with_b b 0 P } [ programs_if Cs C1 C2 ] {interp_assert (post_if_rel Q)}" (* Not Q here... *)
-      and "Cs 0 = Some (if_then_else b C1 C2)"
-  shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q}"
+theorem if_relational_decomposition:
+  assumes "\<Turnstile> { conj (interp_assert (split_at_zero P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) } 
+              [[0 \<mapsto> C1, 1 \<mapsto> C2]] 
+              {interp_assert (split_at_zero Q)}"
+  shows "\<Turnstile> { interp_assert P } [[0 \<mapsto> if_then_else b C1 C2]] {interp_assert Q}"
 proof (rule relational_hyper_hoare_tripleI)
   fix S assume asm0: "interp_assert P S"
 
   let ?S = "split_first_set b S"
 
-  have "split_with_b b 0 P ?S"
-    unfolding split_with_b_def conj_def apply simp_all
+  have "conj (interp_assert (split 0 P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) ?S"
+    unfolding  conj_def apply simp_all
     apply (rule conjI)
      defer
-     apply (simp add: lnot_def)
+     apply (simp add: holds_forall_def lnot_def)
   proof -
     have "is_split 0 S ?S"
       unfolding is_split_def apply simp_all
@@ -337,10 +353,11 @@ proof (rule relational_hyper_hoare_tripleI)
     then show "interp_assert (split 0 P) ?S" using split_soundness[of 0 S ?S "[]" "[]" P]
       using asm0 by blast
   qed
-  then have "interp_assert (post_if_rel Q) (sem_lifted (programs_if Cs C1 C2) ?S)"
-    by (meson assms(1) relational_hyper_hoare_triple_def)
-  then show "interp_assert Q (sem_lifted Cs S)"
-    using assms(2) needed_for_soundness by blast
+  then have "interp_assert (split 0 Q) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] ?S)"
+    using assms(1) unfolding relational_hyper_hoare_triple_def
+    by(simp only: split_zero_lemma)
+  then show "interp_assert Q (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S)"
+    using needed_for_soundness by blast
 qed
 
 
