@@ -11055,7 +11055,7 @@ abbreviation p1 where
 
 
 abbreviation p2 where
-"p2 x i s \<equiv> (IF (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o (len (\<sigma> s))) 
+"p2 x i s \<equiv> (IF (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i <\<^sub>o ((len (\<sigma> s)) -\<^sub>o #1)) 
             THEN 
               x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i))
             FI)::(nat,int_and_list) stmt"
@@ -11063,34 +11063,34 @@ abbreviation p2 where
 thm if_lockstep_arbitrary
 
 
-lemma not_there:"\<exists>y::int. [] ! 0 \<noteq> y"
+lemma not_there:"\<exists>y::int. [0] ! 0 \<noteq> y"
   by presburger
 
 proposition 
   fixes s x i :: nat
   assumes vars_distinct : "distinct [s, x, i]"
-  shows  "\<Turnstile> {(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 1). (snd \<sigma>2 s) !\<^sub>o (len (snd \<sigma>2 s)) \<noteq> (snd \<sigma>1 x))
+  shows  "\<Turnstile> {(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). (snd \<sigma>2 s) !\<^sub>o ((len (snd \<sigma>2 s))-\<^sub>o #1) \<noteq> (snd \<sigma>2 x))
              \<and> (\<forall>\<sigma>2\<in>(S 1). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)))
-              \<and> \<not>emp (S 1)
+              \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)) -\<^sub>o #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o #0)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>xs::int list. snd \<sigma>1 s = ListV xs) \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>xs::int list. snd \<sigma>2 s = ListV xs)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>i'::int. snd \<sigma>1 i = IntV i') \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>i'::int. snd \<sigma>2 i = IntV i')
        )} 
     [[1 \<mapsto> p1 x i s, 2 \<mapsto> p2 x i s]::int_and_list hyper_program] 
      {\<lambda>S::int_and_list hyper_set. (\<exists>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 x \<noteq> snd \<sigma>2 x)}"
 proof-
-  let ?P="(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 1). (snd \<sigma>2 s) !\<^sub>o (len (snd \<sigma>2 s)) \<noteq> (snd \<sigma>1 x))
+  let ?P="(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). (snd \<sigma>2 s) !\<^sub>o ((len (snd \<sigma>2 s))-\<^sub>o #1) \<noteq> (snd \<sigma>2 x))
              \<and> (\<forall>\<sigma>2\<in>(S 1). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)))
-              \<and> \<not>emp (S 1)
+              \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)) -\<^sub>o #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o #0)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>xs::int list. snd \<sigma>1 s = ListV xs) \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>xs::int list. snd \<sigma>2 s = ListV xs)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>i'::int. snd \<sigma>1 i = IntV i') \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>i'::int. snd \<sigma>2 i = IntV i')
        )"
-  let ?bs = "(\<lambda>j::nat. (if (j = 1) then (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o ((len (\<sigma> s)) -\<^sub>o #1)) else (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o (len (\<sigma> s)))))"
+  let ?bs = "(\<lambda>j::nat. (if (j = 1) then (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o ((len (\<sigma> s)) -\<^sub>o #1)) else (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i <\<^sub>o ((len (\<sigma> s)))-\<^sub>o#1)))"
   let ?Cs = "[1 \<mapsto> p1 x i s, 2 \<mapsto> p2 x i s]::int_and_list hyper_program"
   let ?Cs' = "[j \<mapsto> (IF (?bs j)
             THEN 
@@ -11101,7 +11101,7 @@ proof-
     apply(rule)
     by(auto simp add:map_comprehension_def fun_upd_def if_then_else_skip_def)
 
-  have eq2: "pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) (1::nat)
+  have eq2: "pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (lnot (?bs 2))(S 2)) (\<lambda>S. holds_forall (?bs 1) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) (2::nat)
             = Skip"
     apply(simp)
     unfolding entails_def
@@ -11109,22 +11109,22 @@ proof-
     apply(simp only:conj_def)
     apply(simp only:conj_assoc)
   proof -
-    from not_there obtain x'::int where xorg:"[] ! 0 \<noteq> x'" by blast
+    from not_there obtain x'::int where xorg:"[0] ! 0 \<noteq> x'" by blast
     let ?l = "\<lambda>v. #0"
-    let ?\<sigma> = "\<lambda>v. (if (v=s) then (ListV []) else (if (v=i) then #0 else (if (v=x) then #x' else #0)))"
+    let ?\<sigma> = "\<lambda>v. (if (v=s) then (ListV [0]) else (if (v=i) then #0 else (if (v=x) then #x' else #0)))"
     let ?S = "(\<lambda>n. (if (n=1) then {(?l, ?\<sigma>)} else {(?l, ?\<sigma>)}))::int_and_list hyper_set"
-    show "\<exists>S::int_and_list hyper_set. (\<exists>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>2 s !\<^sub>o len (snd \<sigma>2 s) \<noteq> snd \<sigma>1 x) \<and>
+    show "\<exists>S::int_and_list hyper_set. (\<exists>\<sigma>2\<in>S 2. snd \<sigma>2 s !\<^sub>o (len (snd \<sigma>2 s) -\<^sub>o #1) \<noteq> snd \<sigma>2 x) \<and>
         (\<forall>\<sigma>2\<in>S (Suc 0). \<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
         (\<forall>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S 2. snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
-        (\<forall>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
-        (\<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 i = len (snd \<sigma>1 s)) \<and>
-        \<not> emp (S (Suc 0)) \<and>
+        (\<forall>\<sigma>2\<in>S 2. \<exists>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
+        (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>\<sigma>2\<in>S 2. snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
+        (\<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 i = len (snd \<sigma>1 s) -\<^sub>o #1 \<and> snd \<sigma>1 i \<ge>\<^sub>o #0) \<and>
         (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>xs. snd \<sigma>1 s = ListV xs) \<and>
         (\<forall>\<sigma>2\<in>S 2. \<exists>xs. snd \<sigma>2 s = ListV xs) \<and>
         (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>i'. snd \<sigma>1 i = #i') \<and>
         (\<forall>\<sigma>2\<in>S 2. \<exists>i'. snd \<sigma>2 i = #i') \<and>
-        holds_forall (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o len (\<sigma> s)) (S 2) \<and>
-        holds_forall (lnot (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o len (\<sigma> s) -\<^sub>o #1)) (S (Suc 0)) \<and> \<not> holds_forall (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o len (\<sigma> s) -\<^sub>o #1) (S (Suc 0))"
+        holds_forall (lnot (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i <\<^sub>o len (\<sigma> s) -\<^sub>o #1)) (S 2) \<and>
+        holds_forall (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i \<le>\<^sub>o len (\<sigma> s) -\<^sub>o #1) (S (Suc 0)) \<and> \<not> holds_forall (\<lambda>\<sigma>. \<sigma> i \<ge>\<^sub>o #0 \<and> \<sigma> i <\<^sub>o len (\<sigma> s) -\<^sub>o #1) (S 2)"
       apply(rule exI[where x = "?S"])
       apply(intro conjI)
       subgoal premises prems proof - show ?thesis using assms xorg by(auto) qed
@@ -11137,13 +11137,13 @@ proof-
       subgoal premises prems proof - show ?thesis using assms by(auto) qed
       subgoal premises prems proof - show ?thesis using assms by(auto) qed
       subgoal premises prems proof - show ?thesis using assms by(auto) qed
-      subgoal premises prems proof - show ?thesis using assms by(auto simp add:holds_forall_def) qed
-      subgoal premises prems proof - show ?thesis using assms by(auto simp add:holds_forall_def lnot_def)  qed
+      subgoal premises prems proof - show ?thesis using assms by(auto simp add:holds_forall_def lnot_def) qed
+      subgoal premises prems proof - show ?thesis using assms by(auto simp add:holds_forall_def)  qed
       subgoal premises prems proof - show ?thesis using assms by(auto simp add:holds_forall_def)  qed
       done
   qed
 
-  have eq3: "pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) (2::nat)
+  have eq3: "pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (lnot (?bs 2)) (S 2)) (\<lambda>S. holds_forall ((?bs 1)) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) (1::nat)
             = (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))"
     apply(simp)
     unfolding entails_def
@@ -11151,23 +11151,23 @@ proof-
     apply(simp only:conj_assoc)
     apply(intro allI impI)
             apply(erule conjE)+
-    subgoal premises prems proof - show ?thesis using prems(11) by(fastforce) qed
+    subgoal premises prems proof - show ?thesis using prems(12) by(fastforce) qed
     done
 
   have eq4: "[j \<mapsto> 
-    (pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) j) | j \<in> {1,2}]
-      = ([j \<mapsto> (if (j = 1) then Skip else (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) | j \<in> {1::nat, 2}]::int_and_list hyper_program)"
+    (pick_branch (conj ?P  (conj (\<lambda>S. holds_forall (lnot (?bs 2)) (S 2)) (\<lambda>S. holds_forall ((?bs 1)) (S 1)))) ?bs (\<lambda>j. (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) (\<lambda>j. Skip) j) | j \<in> {1,2}]
+      = ([j \<mapsto> (if (j = 2) then Skip else (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) | j \<in> {1::nat, 2}]::int_and_list hyper_program)"
     apply(rule)
     using eq2 eq3
     by(auto simp add:map_comprehension_def map_add_def eq2 eq3)
 
-  have eq5: "[j \<mapsto> (if (j = 1) then Skip else (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) | j \<in> {1::nat, 2}] 
-           = ([j \<mapsto> Skip | j \<in> {1::nat}]::int_and_list hyper_program) ++ ([j \<mapsto> (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i))) | j \<in> {2}]::int_and_list hyper_program)"
+  have eq5: "[j \<mapsto> (if (j = 2) then Skip else (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i)))) | j \<in> {1::nat, 2}] 
+           = ([j \<mapsto> Skip | j \<in> {2::nat}]::int_and_list hyper_program) ++ ([j \<mapsto> (x ::= (\<lambda>\<sigma>. (\<sigma> s) !\<^sub>o (\<sigma> i))) | j \<in> {1}]::int_and_list hyper_program)"
     apply(rule)
     by(auto simp add:map_comprehension_def map_add_def)
 
   show ?thesis
-    apply(rule cons_prec[where ?P'="conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))"])
+    apply(rule cons_prec[where ?P'="conj ?P  (conj (\<lambda>S. holds_forall (lnot (?bs 2)) (S 2)) (\<lambda>S. holds_forall ((?bs 1)) (S 1)))"])
     using assms
     unfolding entails_def 
      apply(simp only:conj_def)
@@ -11193,15 +11193,15 @@ proof-
     subgoal premises prems proof - show ?thesis using prems(10) by(fastforce) qed
      apply(erule conjE)+
     subgoal premises prems proof - show ?thesis using prems(11) by(fastforce) qed
-     apply(erule conjE)+
+      apply(erule conjE)+
     subgoal premises prems for S proof - show ?thesis
       proof -
-        have H:"\<forall>\<sigma>2\<in>S 2. snd \<sigma>2 i = len (snd \<sigma>2 s)" using prems(4) prems(6) prems(5) prems(9) prems(8) prems(7) unfolding emp_def by fastforce
-        show ?thesis using H prems(9) prems(11) unfolding holds_forall_def by auto
+        have H:"\<forall>\<sigma>2\<in>S 2. snd \<sigma>2 i = (len (snd \<sigma>2 s) -\<^sub>o  #1)" using prems(4) prems(6) prems(5) prems(9) prems(8) prems(7) unfolding emp_def by fastforce
+        show ?thesis using H prems(9) prems(11) unfolding holds_forall_def lnot_def by auto
       qed
     qed
      apply(erule conjE)+
-    subgoal premises prems proof - show ?thesis using prems(3) prems(6) prems(8) unfolding holds_forall_def lnot_def by(fastforce) qed
+    subgoal premises prems proof - show ?thesis using prems(3) prems(6) prems(7) prems(8) unfolding holds_forall_def  by(fastforce) qed
     apply(simp only:eq)
     apply(rule if_lockstep_arbitrary)
     subgoal premises prems proof(intro ballI)
@@ -11209,16 +11209,16 @@ proof-
       assume "j \<in> {1, 2}"
       hence "j = 1 \<or> j = 2" by auto
       thus "(entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
            \<or> (entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
       proof
         assume asm:"j=1"
         show "(entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
            \<or> (entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
-          apply(rule disjI2)
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
+          apply(rule disjI1)
           using assms
           unfolding entails_def 
           apply(simp only:conj_def)
@@ -11230,10 +11230,10 @@ proof-
       next
         assume asm:"j=2"
         show "(entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (?bs j) (S j)))
            \<or> (entails
-          (conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
-          apply(rule disjI1)
+          (conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1)))) (\<lambda>S. holds_forall (lnot (?bs j)) (S j)))" 
+          apply(rule disjI2)
           using assms
           unfolding entails_def 
           apply(simp only:conj_def)
@@ -11246,7 +11246,7 @@ proof-
     qed
     apply(simp only:eq4)
     apply(simp only:eq5)
-    apply(rule rel_extension[where ?R="(conj ?P  (conj (\<lambda>S. holds_forall (?bs 2) (S 2)) (\<lambda>S. holds_forall (lnot (?bs 1)) (S 1))))"])
+    apply(rule rel_extension[where ?R="(conj ?P  (conj (\<lambda>S. holds_forall (lnot(?bs 2)) (S 2)) (\<lambda>S. holds_forall ( (?bs 1)) (S 1))))"])
       apply(rule skip_lockstep)
      prefer 2
      apply(simp add:map_comprehension_def dom_def)
@@ -11260,7 +11260,8 @@ proof-
      apply(intro allI impI conjI)
             apply(erule conjE)+
     subgoal premises prems proof - show ?thesis using prems(2) apply(auto)
-        by (metis One_nat_def fun_upd_same prems(5,6) snd_eqD) qed
+        using prems(3,4,5,6)
+        by (metis fun_upd_same numeral_1_eq_Suc_0 numeral_One prems(7) snd_eqD) qed
     done
 qed
 
