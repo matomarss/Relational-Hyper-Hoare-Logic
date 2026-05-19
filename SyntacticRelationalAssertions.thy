@@ -10756,7 +10756,7 @@ proof -
      apply (simp add: entail_conj_weaken)
     apply(rule while_nonfixed_alignment5[where V = "?V" and Q = "?Q" and ?Q_inf="?Q"  and I="{0,1}" and ?bs = "(\<lambda>j. (\<lambda>s. (s i) < (s n)))" and Iv="?Iv"])
   proof -
-    show "\<forall>na. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv na) (conj (holds_for_prog_set J (\<lambda>j s. s i < s n)) (?V J))} [[i \<mapsto> ?bodies i  | i \<in> J]] { ?Iv (Suc na) }"
+    show "\<forall>na. \<forall>J\<in>(Pow {0,1} - {{}}). \<Turnstile> { conj (?Iv na) (conj (holds_for_prog_set J ?conds) (?V J))} [[j \<mapsto> (?bodies j) | j \<in> J]] { ?Iv (Suc na) }"
     proof (intro allI ballI)
       fix m 
       fix J ::"nat set"

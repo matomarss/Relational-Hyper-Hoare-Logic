@@ -84,6 +84,7 @@ definition valid :: "hyper_assertion \<Rightarrow> bool"
 "\<Turnstile>LHC P = (\<forall>S. P S)"
 
 
+
 section \<open>Subsumption by RHHL\<close>
 
 
