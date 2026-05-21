@@ -346,6 +346,17 @@ next
 qed
 
 
+lemma single_sem_eq_fin:
+  assumes "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>0'" and "\<sigma>0' = \<sigma>'"
+  shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  using assms by simp
+
+
+lemma single_sem_eq_init:
+  assumes "\<langle>C, \<sigma>0\<rangle> \<rightarrow> \<sigma>'" and "\<sigma>0 = \<sigma>"
+  shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+  using assms by simp
+
 
 lemma LHC_RHHL_sem_equiv_general: "(length prev_stack) = sp \<and> (vp - sp) \<ge> 1+(get_deepest_operation_depth lhcC) \<Longrightarrow> (\<langle>lhcC, \<sigma>\<rangle> \<Down> \<langle>v, \<sigma>'\<rangle> = (\<langle>translate_program lhcC sp vp, transform_state_with_return_val v0 \<sigma> prev_stack vp\<rangle> \<rightarrow> (transform_state_with_return_val v \<sigma>' prev_stack vp)))"
 proof

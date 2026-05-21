@@ -241,6 +241,26 @@ proof -
 qed
 
 
+text\<open>Another corollary of the seq_extension rule used for stepping only a single program.\<close>
+corollary progress_any:
+  assumes "Cs i = Some (C1;; C2)"
+      and "\<Turnstile> {P} [ [i \<mapsto> C1] ] {R}"
+      and "\<Turnstile> {R} [ Cs(i \<mapsto> C2) ] {Q}"
+    shows "\<Turnstile> {P} [ Cs ] {Q}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "P S"
+  moreover have "Cs = hyper_seq [i \<mapsto> C1] (Cs(i \<mapsto> C2))"
+    unfolding hyper_seq_def
+    apply (rule ext)
+    apply (case_tac "n = i")
+    by (simp_all add: assms)
+  ultimately show "Q (sem_rel Cs S)"
+    using seq_extension[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
+    by (metis assms(2) assms(3) relational_hyper_hoare_triple_def)
+qed
+
+
+
 lemma seq_associativity_main:
   shows "sem_rel (Cs1;;\<^sub>HCs2;;\<^sub>HCs3) S = sem_rel ((Cs1;;\<^sub>HCs2);;\<^sub>HCs3) S"
 proof 
@@ -5112,14 +5132,102 @@ theorem while_nonfixed_lckG2:
 
 
 
+
+
+
+
+
 section\<open>3.7 Refinement rules\<close>
+
+subsection\<open>Meta refinement rule\<close>
+
+text\<open>Refinement relation between two hyper-programs. Satisfied if all corresponding programs
+      are in the refinement relation.\<close>
+definition refines_hyper_program :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> bool"where
+"refines_hyper_program Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
+
+
+fun no_exists_state :: "'a syn_assertion \<Rightarrow> bool" where
+"no_exists_state (AConst _) = True" |
+"no_exists_state (AComp _ _ _) = True" |
+"no_exists_state (AForallState _ A) = no_exists_state A" |
+"no_exists_state (AExistsState _ _) = False" |
+"no_exists_state (AForall A) = no_exists_state A" | 
+"no_exists_state (AExists A) = no_exists_state A" |
+"no_exists_state (AOr A1 A2) = ((no_exists_state A1) \<and> (no_exists_state A2))" |
+"no_exists_state (AAnd A1 A2) = ((no_exists_state A1) \<and> (no_exists_state A2))"
+
+
+lemma meta_refinement_rule_main:
+  assumes "refines_hyper_program Cs1 Cs2"
+      and "no_exists_state Q"
+      and "sat_assertion vals states Q (sem_rel Cs2 S)"
+    shows "sat_assertion vals states Q (sem_rel Cs1 S)"
+proof -
+  from assms(2) assms(3) show "sat_assertion vals states Q (sem_rel Cs1 S)"
+  proof (induction Q arbitrary:vals states)
+    case (AConst x)
+    then show ?case by simp
+  next
+    case (AComp x1a x2 x3)
+    then show ?case by simp
+  next
+    case (AForallState x1a Q)
+    then show ?case 
+      by (meson assms(1) no_exists_state.simps(3) refines_hyper_program_def sat_assertion.simps(3) subset_iff)
+  next
+    case (AExistsState x1a Q)
+    then show ?case 
+      by auto
+  next
+    case (AForall Q)
+    then show ?case 
+      by simp
+  next
+    case (AExists Q)
+    then show ?case by auto
+  next
+    case (AOr Q1 Q2)
+    then show ?case by auto
+  next
+    case (AAnd Q1 Q2)
+    then show ?case by auto
+  qed
+qed
+
+text\<open>Uses meta-level reasoning about refinement as compared to the refinement_rule below.\<close>
+theorem meta_refinement_rule:
+  assumes "refines_hyper_program Cs1 Cs2"
+      and "\<Turnstile> {P} [Cs2] {interp_assert Q}"
+      and "no_exists_state Q"
+    shows "\<Turnstile> {P} [Cs1] {interp_assert Q}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "P S"
+  with assms(2) have "interp_assert Q (sem_rel Cs2 S)"
+    by (simp add: relational_hyper_hoare_tripleE)
+  with assms(1) assms(3) meta_refinement_rule_main show "interp_assert Q (sem_rel Cs1 S)" by blast
+qed
+
 
 definition sem_equiv_hyper where
 "sem_equiv_hyper Cs1 Cs2 = (\<forall>S. (sem_rel Cs1 S) = (sem_rel Cs2 S))"
 
+lemma ref_equiv: "sem_equiv_hyper Cs1 Cs2 \<longleftrightarrow> (refines_hyper_program Cs1 Cs2) \<and> (refines_hyper_program Cs2 Cs1)"
+  unfolding sem_equiv_hyper_def refines_hyper_program_def
+  by fastforce
+
+definition refines_hyper_program_cond :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> bool"where
+"refines_hyper_program_cond Cs1 Cs2 P  = (\<forall>S. (P S) \<longrightarrow> (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
+
+lemma ref_equiv_cond: "sem_equiv_hyper_cond Cs1 Cs2 P \<longleftrightarrow> (refines_hyper_program_cond Cs1 Cs2 P) \<and> (refines_hyper_program_cond Cs2 Cs1 P)"
+  unfolding sem_equiv_hyper_cond_def refines_hyper_program_cond_def
+  by fastforce
+
 lemma sem_equiv_hyper_refl:
   "sem_equiv_hyper Cs1 Cs2 = sem_equiv_hyper Cs2 Cs1"
   unfolding sem_equiv_hyper_def by auto
+
 
 theorem rewrite_rule:
     assumes "sem_equiv_hyper Cs1 Cs2"
@@ -5129,268 +5237,184 @@ theorem rewrite_rule:
   by(auto simp add:relational_hyper_hoare_triple_def sem_rel_def sem_equiv_hyper_def)
 
 
+subsection\<open>Semantic refinement rule\<close>
+
+definition ref_cond where
+ "ref_cond i j S = (\<forall>\<sigma>i\<in>(S i). \<exists>\<sigma>j \<in> (S j). \<sigma>i = \<sigma>j)"
 
 
-section \<open>Reindexing\<close>
-
-
-type_synonym reindexing = "nat \<Rightarrow> nat"
-
-fun reindex_syn_assertion where
-  "reindex_syn_assertion \<pi> (AConst b) = AConst b"
-| "reindex_syn_assertion \<pi> (AComp e1 cmp e2) = AComp e1 cmp e2"
-| "reindex_syn_assertion \<pi> (AForallState n A) = AForallState (\<pi> n) (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AExistsState n A) = AExistsState (\<pi> n) (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AForall A) = AForall (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AExists A) = AExists (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AOr A B) = AOr (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
-| "reindex_syn_assertion \<pi> (AAnd A B) = AAnd (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
-
-definition reindex_hyper_stuff where
-  "reindex_hyper_stuff \<pi> S n = S (\<pi> n)"
-
-lemma reindex_equiv:
-  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<longleftrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
-  unfolding reindex_hyper_stuff_def
-  by (induct A arbitrary: vals states) auto
-
-lemma reindex_both_impl:
-  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<Longrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
-  "sat_assertion vals states A (reindex_hyper_stuff \<pi> S) \<Longrightarrow> sat_assertion vals states (reindex_syn_assertion \<pi> A) S"
-  using reindex_equiv by blast+
-
-lemma sem_lifted_reindex:
-  "reindex_hyper_stuff \<pi> (sem_rel Cs S) = sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S)"
-  apply (rule ext)
-  by (simp add: reindex_hyper_stuff_def sem_rel_def)
-
-
-theorem reindex_rule_one_direction:
-  assumes "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q}"
-  shows "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "interp_assert (reindex_syn_assertion \<pi> P) S"
-  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
-    by (simp add: reindex_both_impl(1))
-  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
-    by (meson assms relational_hyper_hoare_triple_def)
-  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
-    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
+lemma refinement_rule_main:
+  assumes "\<Turnstile> {ref_cond 0 1} [[0 \<mapsto> C1, 1 \<mapsto> C2]] {ref_cond 0 1}"
+  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
+  unfolding refines_hyper_program_def
+proof (intro allI ballI)
+  fix Ss::"'a hyper_set"
+  fix i
+  let ?Ss' = "(\<lambda>i. if i = 0 then (Ss 0) else (if i = 1 then (Ss 0) else {}))" 
+  have "(ref_cond 0 1) ?Ss'" unfolding ref_cond_def by auto
+  with assms have "(ref_cond 0 1) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] ?Ss')"
+    by (simp add: relational_hyper_hoare_triple_def ref_cond_def)
+  from this show "sem_rel [0 \<mapsto> C1] Ss i \<subseteq> sem_rel [0 \<mapsto> C2] Ss i" unfolding ref_cond_def 
+    by(auto simp add:sem_rel_def)
 qed
 
-lemma reindex_bij:
-  assumes "bij \<pi>"
-  shows "P = reindex_syn_assertion \<pi> (reindex_syn_assertion (inv \<pi>) P)"
-  using assms
-  apply (induct P) apply simp_all
-  by (metis bij_inv_eq_iff)+
 
-
-theorem reindex_rule_one_direction_bij:
-  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ reindex_hyper_stuff (inv \<pi>) Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-      and "bij \<pi>"
-  shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q }"
+text\<open>Rule inspired by the wp-refine rule of LHC but instead of meta-level reasoning leverages RHHL's
+      capability of proving the refinement result within the logic.\<close>
+theorem refinement_rule:
+  assumes "\<Turnstile> {ref_cond 0 1} [[0 \<mapsto> C1, 1 \<mapsto> C2]] {ref_cond 0 1}"
+      and "\<Turnstile> {P} [[0 \<mapsto> C2]] {interp_assert Q}"
+      and "no_exists_state Q"
+    shows "\<Turnstile> {P} [[0 \<mapsto> C1]] {interp_assert Q}"
 proof -
-  have "interp_assert P = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) P))"
-    by (metis assms(2) bij_betw_inv_into reindex_bij)
-  moreover have "interp_assert Q = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) Q))"
-    by (metis assms(2) bij_betw_inv_into reindex_bij)
-  ultimately show ?thesis
-    by (simp add: assms(1) assms(2) inv_inv_eq reindex_rule_one_direction)
+  from assms refinement_rule_main meta_refinement_rule show ?thesis by blast
 qed
 
 
 
+subsection\<open>Syntactic refinement rule\<close>
 
-(*
-theorem reindex_rule_other_direction:
-  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-  shows "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q }"
-(* I think this one needs bijection *)
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "interp_assert P S"
-
-
-"interp_assert (reindex_syn_assertion \<pi> P) S"
-  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
-    by (simp add: reindex_both_impl(1))
-  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
-    by (meson assms relational_hyper_hoare_triple_def)
-  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
-    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
-qed
-*)
+fun pexp_var :: "'a pexp \<Rightarrow> nat list" where
+"pexp_var (PVar v) = [v]" 
+| "pexp_var (PConst _) = []"
+| "pexp_var (PBinop pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
+| "pexp_var (PFun _ pe) = pexp_var pe"
 
 
-
-(* Use case: Generalized if rule *)
-
-(*
-theorem rule_if_relational_generalized:
-  assumes "\<Turnstile> { split_with_b b k P } [ programs_if Cs C1 C2 ] {interp_assert (post_if_rel Q)}" (* Not Q here... *)
-      and "Cs k = Some (if_then_else b C1 C2)"
-    shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q}"
-proof (rule reindex_rule_one_direction_bij)
-
-  thm rule_if_relational[of b ]
-*)
+fun pbexp_var :: "'a pbexp \<Rightarrow> nat list" where
+"pbexp_var (PBConst _) = []"
+| "pbexp_var (PBAnd pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
+| "pbexp_var (PBOr pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
+| "pbexp_var (PBComp pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
 
 
+text\<open>Gather all variables accessed by the program (read / written).\<close>
+fun pvar :: "'a syn_stmt \<Rightarrow> nat list" where
+"pvar (AssignS v pe) = v#(pexp_var pe)" |
+"pvar (SeqS C1 C2) = (pvar C1) @ (pvar C2)" |
+"pvar (IfS C1 C2) = (pvar C1) @ (pvar C2)" |
+"pvar (SkipS) = []" |
+"pvar (HavocS v) = [v]" |
+"pvar (AssumeS pb) = pbexp_var pb" |
+"pvar (WhileS C) = pvar C"
 
 
+fun refinement_syn_assert_vars :: "nat list \<Rightarrow> 'a syn_assertion" where
+"refinement_syn_assert_vars [] = (AConst True)" |
+"refinement_syn_assert_vars (v#vs) = AAnd (AComp (EPVar 1 v) (=) (EPVar 0 v)) (refinement_syn_assert_vars vs)"
 
-section \<open>Progress only one\<close>
+definition refinement_syn_assert :: "nat \<Rightarrow> nat \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_assertion" where
+"refinement_syn_assert i j C1 C2 = (AForallState i (AExistsState j (refinement_syn_assert_vars ((pvar C1) @ (pvar C2)))))"
 
-corollary progress_any:
-  assumes "Cs i = Some (C1;; C2)"
-      and "\<Turnstile> {P} [ [i \<mapsto> C1] ] {R}"
-      and "\<Turnstile> {R} [ Cs(i \<mapsto> C2) ] {Q}"
-    shows "\<Turnstile> {P} [ Cs ] {Q}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "P S"
-  moreover have "Cs = hyper_seq [i \<mapsto> C1] (Cs(i \<mapsto> C2))"
-    unfolding hyper_seq_def
-    apply (rule ext)
-    apply (case_tac "n = i")
-    by (simp_all add: assms)
-  ultimately show "Q (sem_rel Cs S)"
-    using seq_extension[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
-    by (metis assms(2) assms(3) relational_hyper_hoare_triple_def)
-qed
+text\<open>Semantic version for the syntactic assertion above\<close>
+definition refinement_assert where
+"refinement_assert i j C1 C2 S = (\<forall>(li,\<sigma>i) \<in> (S i). (\<exists>(lj,\<sigma>j)\<in>(S j). (\<forall>x \<in> (set ((pvar C1) @ (pvar C2))). (\<sigma>i x) = (\<sigma>j x))))"
 
 
-section \<open>Thibault's Loop rules\<close>
-
-
-fun no_exists_stateI :: "nat set \<Rightarrow> 'a syn_assertion \<Rightarrow> bool"
-  where
-  "no_exists_stateI I (AConst _) \<longleftrightarrow> True"
-| "no_exists_stateI I (AComp _ _ _) \<longleftrightarrow> True"
-| "no_exists_stateI I (AForallState _ A) \<longleftrightarrow> no_exists_stateI I A"
-| "no_exists_stateI I (AExistsState i A) \<longleftrightarrow> i \<notin> I \<and> no_exists_stateI I A"
-| "no_exists_stateI I (AForall A) \<longleftrightarrow> no_exists_stateI I A"
-| "no_exists_stateI I (AExists A) \<longleftrightarrow> no_exists_stateI I A"
-| "no_exists_stateI I (AAnd A B) \<longleftrightarrow> no_exists_stateI I A \<and> no_exists_stateI I B"
-| "no_exists_stateI I (AOr A B) \<longleftrightarrow> no_exists_stateI I A \<and> no_exists_stateI I B"
-
-
-
-lemma mono_sym_then_up_closed:
-  assumes "no_exists_stateI I A"
-      and "hyper_set_le I S S'"
-      and "sat_assertion vals states A S'"
-    shows "sat_assertion vals states A S"
-  using assms
-proof (induct A arbitrary: vals states)
-  case (AForallState i A)
-  then have "S i \<subseteq> S' i"
-    by (metis Orderings.order_eq_iff hyper_set_le_def)
-  then show ?case
-    using AForallState.hyps AForallState.prems(1) AForallState.prems(3) assms(2) by auto
+lemma refinement_syn_assert_vars_sound: "(\<forall>x \<in> (set Vs). ((snd \<sigma>) x) = ((snd \<sigma>') x)) = 
+                                          sat_assertion [] [\<sigma>', \<sigma>] (refinement_syn_assert_vars Vs) S"
+proof (induction Vs)
+  case Nil
+  then show ?case by(auto)
 next
-  case (AExistsState i A)
-  then show ?case
-  proof (simp)
-    obtain \<phi> where "\<phi>\<in>S i" "sat_assertion vals (\<phi> # states) A S'"
-      using AExistsState(3) unfolding hyper_set_le_def
-      using AExistsState.prems(1) AExistsState.prems(3) by auto
-    then have "sat_assertion vals (\<phi> # states) A S"
-      using AExistsState(1)[OF _ AExistsState(3), of vals "\<phi> # states"]
-      using AExistsState.prems(1) by fastforce
-    then show "\<exists>\<phi>\<in>S i. sat_assertion vals (\<phi> # states) A S"
-      using \<open>\<phi> \<in> S i\<close> by blast
+  case (Cons a Vs)
+  then show ?case by(auto)
+qed
+
+
+lemma refinement_syn_assert_sound: "interp_assert (refinement_syn_assert i j C1 C2) S = (refinement_assert i j C1 C2) S"
+  unfolding refinement_syn_assert_def refinement_assert_def
+  apply(auto)
+   apply (smt (verit, ccfv_threshold) case_prodI2 set_append snd_conv refinement_syn_assert_vars_sound)
+  using refinement_syn_assert_vars_sound by fastforce
+
+
+text\<open>Standard definition of the refinement relation between two programs\<close>
+definition refines_program where
+"refines_program C1 C2 = (\<forall>\<sigma> \<sigma>'. \<langle>C1, \<sigma>\<rangle> \<rightarrow> \<sigma>' \<longrightarrow> \<langle>C2, \<sigma>\<rangle> \<rightarrow> \<sigma>')"
+
+
+lemma variable_preservation:
+  assumes "\<langle>interp_syn_stmt C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+      and "x \<notin> (set (pvar C))" 
+    shows "\<sigma> x = \<sigma>' x"
+  using assms
+proof (induction C arbitrary: \<sigma> \<sigma>')
+  case (AssignS x1 x2)
+  then show ?case by(auto)
+next
+  case (SeqS C1 C2)
+  have "x \<notin> set (pvar (SeqS C1 C2)) \<Longrightarrow> x \<notin> set (pvar C1) \<and> x \<notin> set (pvar C2)" by auto
+  with SeqS show ?case
+    by (metis interp_syn_stmt.simps(2) single_sem_Seq_elim)
+next
+  case (IfS C1 C2)
+  then show ?case by auto
+next
+  case SkipS
+  then show ?case by auto
+next
+  case (HavocS x)
+  then show ?case by auto
+next
+  case (AssumeS x)
+  then show ?case by auto
+next
+  case (WhileS C)
+  then show ?case by auto
+qed
+
+lemma refinement_hyper_triple_sound:
+  assumes "\<Turnstile> {(refinement_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {(refinement_assert 0 1 C1 C2)}"
+  shows "refines_program (interp_syn_stmt C1) (interp_syn_stmt C2)"
+  unfolding refines_program_def
+proof (intro allI impI)
+  fix \<sigma> \<sigma>'
+  assume asm: "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
+
+  let ?S = "\<lambda>i. (if i = 0 then {(\<sigma>,\<sigma>)} else (if i = 1 then {(\<sigma>,\<sigma>)} else {}))"
+  have "(refinement_assert 0 1 C1 C2) ?S" unfolding refinement_assert_def by(auto)
+  with assms have H: "(refinement_assert 0 1 C1 C2) (sem_rel [0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)] ?S)"
+    using relational_hyper_hoare_tripleE by blast
+  from variable_preservation have "\<And>\<phi> \<phi>'. (\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>) \<and> (\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>') \<and> (\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x) \<Longrightarrow> \<phi> = \<phi>'"
+    apply(auto)
+  proof -
+    fix \<phi> :: "nat \<Rightarrow> 'a" and \<phi>' :: "nat \<Rightarrow> 'a"
+    assume a1: "\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x"
+    assume a2: "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>'"
+    assume "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>"
+    then have f3: "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi> n"
+      using a1 by (meson UnCI variable_preservation)
+    have "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi>' n"
+      using a2 a1 by (meson UnCI variable_preservation)
+    then show "\<phi> = \<phi>'"
+      using f3 by fastforce
   qed
-qed (auto)
+  with H asm show "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by(auto simp add:refinement_assert_def sem_rel_def sem_def)
+qed
 
 
+lemma refines_program_lifted:
+  assumes "refines_program C1 C2"
+  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
+  unfolding refines_hyper_program_def 
+proof (intro allI)
+  fix S i 
+  from assms show "sem_rel [0 \<mapsto> C1] S i \<subseteq> sem_rel [0 \<mapsto> C2] S i" unfolding refines_program_def
+    apply(auto simp add:sem_rel_def sem_def)
+    by auto
+qed
 
-
-
-section \<open>General while loop from Thibault\<close>
-
-
-(* Set becomes larger for  *)
-
-
-
-definition construct_programs where
-  "construct_programs I f i = (if i \<in> I then Some (f i) else None)"
-
-
-definition holds_forall_relational where
-  "holds_forall_relational I b S \<longleftrightarrow> (\<forall>i \<in> I. \<forall>\<phi>\<in>S i. b (snd \<phi>))"
-
-
-fun iterate_sem_lifted where
-  "iterate_sem_lifted 0 _ S = S"
-| "iterate_sem_lifted (Suc n) Cs S = sem_rel Cs (iterate_sem_lifted n Cs S)"
-
-lemma relational_indexed_invariant_then_power:
-  assumes "\<And>n. relational_hyper_hoare_triple (I n) Cs (I (Suc n))"
-      and "I 0 S"
-  shows "I n (iterate_sem_lifted n Cs S)"
-  using assms
-proof (induct n arbitrary: S)
-next
-  case (Suc n)
-  then have "I n (iterate_sem_lifted n Cs S)"
-    by blast
-  then have "I (Suc n) (sem_rel Cs (iterate_sem_lifted n Cs S))"
-    using Suc.prems(1) relational_hyper_hoare_tripleE by blast
-  then show ?case
-    by (simp add: Suc.hyps Suc.prems(1))
-qed (auto)
-
-definition union_hyper_sets where
-  "union_hyper_sets A B i = A i \<union> B i"
-
-fun relational_union_up_to_n where
-  "relational_union_up_to_n C S 0 = iterate_sem_lifted 0 C S"
-| "relational_union_up_to_n C S (Suc n) = union_hyper_sets (iterate_sem_lifted (Suc n) C S) (relational_union_up_to_n C S n)"
-
-definition map_indices where
-  "map_indices I f S i = (if i \<in> I then f i (S i) else S i)"
-
-definition filter_exp_indices where
-  "filter_exp_indices I b S = map_indices I (\<lambda>i. filter_exp (lnot (b i))) S"
-
-lemma relational_iterate_sem_assume_increasing:
-  assumes "Cs = construct_programs I (\<lambda>i. if_then (b i) (C i))"
-  shows "hyper_set_le I (filter_exp_indices I b (iterate_sem_lifted n Cs S)) (filter_exp_indices I b (iterate_sem_lifted (Suc n) Cs S))"
-  apply (rule hyper_set_leI)
-  using assms unfolding hyper_set_le_def filter_exp_indices_def construct_programs_def map_indices_def
-   apply simp_all
-   apply (smt (verit) UnCI filter_exp_def if_then_sem member_filter option.sel partial_sem.elims sem_rel_def subsetI)
-  by (simp add: sem_rel_def)
-
-
-lemma relational_filter_exp_union:
-  "filter_exp_indices I b (union_hyper_sets S1 S2) = union_hyper_sets (filter_exp_indices I b S1) (filter_exp_indices I b S2)" (is "?A = ?B")
-  unfolding filter_exp_indices_def union_hyper_sets_def
-  apply (rule ext)
-  apply rule
-  by (simp_all add: filter_exp_union map_indices_def)
-
-
-(*
-lemma relational_iterate_sem_assume_increasing_union_up_to:
-  assumes "Cs = construct_programs I (\<lambda>i. if_then (b i) (C i))"
-  shows "filter_exp_indices I b (iterate_sem_lifted n Cs S) = filter_exp_indices I b (relational_union_up_to_n Cs S n)"
-
-
-theorem relational_while_general_simple:
-  assumes "\<And>n. \<Turnstile> {P n} [ construct_programs I (\<lambda>i. if_then (b i) (C i)) ] { P (Suc n) }"
-      and "\<And>n. \<Turnstile> {P n} [ construct_programs I (\<lambda>i. Assume (lnot (b i))) ] {Q n}"
-      and "relational_upwards_closed I Q Q_inf"
-
-  shows "\<Turnstile> {P 0} [ construct_programs I (\<lambda>i. while_cond (b i) (C i)) ] {conj Q_inf (\<lambda>S. \<forall>i \<in> I. \<forall>\<phi> \<in> S i. \<not> b i (snd \<phi>)) }"
-
-*)
-(* Thibault's own TODO: Think about this: *)
-
-lemma ascending_iterate_filter:
-  "ascending (\<lambda>n. filter_exp (lnot b) (union_up_to_n (if_then b C) S n))"
-  by (metis ascendingI iterate_sem_assume_increasing iterate_sem_assume_increasing_union_up_to)
+text\<open>RefinementS - Same as the refinement_rule but uses only syntactic relational hyper-assertions in the refinement relational hyper-triple.\<close>
+theorem refinementS:
+  assumes "\<Turnstile> {interp_assert (refinement_syn_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {interp_assert (refinement_syn_assert 0 1 C1 C2)}"
+      and "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C2)]] {interp_assert Q}"
+      and "no_exists_state Q"
+    shows "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C1)]] {interp_assert Q}"
+proof -
+  from refinement_syn_assert_sound refinement_hyper_triple_sound refines_program_lifted assms meta_refinement_rule show ?thesis
+    by (smt (verit, ccfv_threshold) relational_hyper_hoare_tripleE relational_hyper_hoare_tripleI)
+qed
 
 
 
@@ -5399,20 +5423,48 @@ lemma ascending_iterate_filter:
 
 
 
+section \<open>Further rules proven\<close>
+
+theorem conj_rule:
+  assumes "\<Turnstile> {P1} [Cs] {Q1}"
+      and "\<Turnstile> {P2} [Cs] {Q2}"
+    shows "\<Turnstile> {conj P1 P2} [Cs] {conj Q1 Q2}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "(conj P1 P2) S"
+  from \<open>(conj P1 P2) S\<close> assms(1) have H1:"Q1 (sem_rel Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE conj_def)
+  from \<open>(conj P1 P2) S\<close> assms(2) have H2:"Q2 (sem_rel Cs S)"
+    by (simp add: relational_hyper_hoare_tripleE conj_def)
+  show "conj Q1 Q2 (sem_rel Cs S)"
+    by(auto simp add:conj_def H1 H2)
+qed
 
 
-section \<open>Single sem usage simplification rules\<close>
+theorem disj_rule:
+  assumes "\<Turnstile> {P1} [Cs] {Q1}"
+      and "\<Turnstile> {P2} [Cs] {Q2}"
+    shows "\<Turnstile> {disj P1 P2} [Cs] {disj Q1 Q2}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "disj P1 P2 S"
+  with assms have "Q1 (sem_rel Cs S) \<or> Q2 (sem_rel Cs S)"
+    unfolding disj_def relational_hyper_hoare_triple_def by auto
+  thus "disj Q1 Q2 (sem_rel Cs S)" unfolding disj_def by auto
+qed
 
-lemma single_sem_eq_fin:
-  assumes "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>0'" and "\<sigma>0' = \<sigma>'"
-  shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-  using assms by simp
 
+corollary postcondition_conj:
+  assumes "\<Turnstile> {P} [Cs] {Q1}"
+      and "\<Turnstile> {P} [Cs] {Q2}"
+    shows "\<Turnstile> {P} [Cs] {conj Q1 Q2}"
+  apply(rule cons)
+   apply(rule entail_conj)
+    apply(rule entails_refl)
+   apply(rule entails_refl)
+  apply(rule conj_rule)
+  using assms by auto
 
-lemma single_sem_eq_init:
-  assumes "\<langle>C, \<sigma>0\<rangle> \<rightarrow> \<sigma>'" and "\<sigma>0 = \<sigma>"
-  shows "\<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-  using assms by simp
 
 
 section \<open>LHC's subsumed rules\<close>
@@ -5562,6 +5614,14 @@ qed
 
 
 subsection \<open>Reindexing rules\<close>
+
+definition reindex_hyper_stuff where
+  "reindex_hyper_stuff \<pi> S n = S (\<pi> n)"
+
+lemma sem_lifted_reindex:
+  "reindex_hyper_stuff \<pi> (sem_rel Cs S) = sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S)"
+  apply (rule ext)
+  by (simp add: reindex_hyper_stuff_def sem_rel_def)
 
 definition reindex_assertion where
 "reindex_assertion \<pi> P S = P (reindex_hyper_stuff \<pi> S)"
@@ -5796,270 +5856,7 @@ next
 qed
 
 
-text\<open>Refinement relation between two hyper-programs. Satisfied if all corresponding programs
-      are in the refinement relation.\<close>
-definition refines_hyper_program :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> bool"where
-"refines_hyper_program Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
-
-lemma ref_equiv: "sem_equiv_hyper Cs1 Cs2 \<longleftrightarrow> (refines_hyper_program Cs1 Cs2) \<and> (refines_hyper_program Cs2 Cs1)"
-  unfolding sem_equiv_hyper_def refines_hyper_program_def
-  by fastforce
-
-definition refines_hyper_program_cond :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> bool"where
-"refines_hyper_program_cond Cs1 Cs2 P  = (\<forall>S. (P S) \<longrightarrow> (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
-
-lemma ref_equiv_cond: "sem_equiv_hyper_cond Cs1 Cs2 P \<longleftrightarrow> (refines_hyper_program_cond Cs1 Cs2 P) \<and> (refines_hyper_program_cond Cs2 Cs1 P)"
-  unfolding sem_equiv_hyper_cond_def refines_hyper_program_cond_def
-  by fastforce
-
-
-fun no_exists_state :: "'a syn_assertion \<Rightarrow> bool" where
-"no_exists_state (AConst _) = True" |
-"no_exists_state (AComp _ _ _) = True" |
-"no_exists_state (AForallState _ A) = no_exists_state A" |
-"no_exists_state (AExistsState _ _) = False" |
-"no_exists_state (AForall A) = no_exists_state A" | 
-"no_exists_state (AExists A) = no_exists_state A" |
-"no_exists_state (AOr A1 A2) = ((no_exists_state A1) \<and> (no_exists_state A2))" |
-"no_exists_state (AAnd A1 A2) = ((no_exists_state A1) \<and> (no_exists_state A2))"
-
-
-lemma meta_refinement_rule_main:
-  assumes "refines_hyper_program Cs1 Cs2"
-      and "no_exists_state Q"
-      and "sat_assertion vals states Q (sem_rel Cs2 S)"
-    shows "sat_assertion vals states Q (sem_rel Cs1 S)"
-proof -
-  from assms(2) assms(3) show "sat_assertion vals states Q (sem_rel Cs1 S)"
-  proof (induction Q arbitrary:vals states)
-    case (AConst x)
-    then show ?case by simp
-  next
-    case (AComp x1a x2 x3)
-    then show ?case by simp
-  next
-    case (AForallState x1a Q)
-    then show ?case 
-      by (meson assms(1) no_exists_state.simps(3) refines_hyper_program_def sat_assertion.simps(3) subset_iff)
-  next
-    case (AExistsState x1a Q)
-    then show ?case 
-      by auto
-  next
-    case (AForall Q)
-    then show ?case 
-      by simp
-  next
-    case (AExists Q)
-    then show ?case by auto
-  next
-    case (AOr Q1 Q2)
-    then show ?case by auto
-  next
-    case (AAnd Q1 Q2)
-    then show ?case by auto
-  qed
-qed
-
-text\<open>Modified version of the rewrite_rule_cond inspired by LHC's wp-refine. 
-    It uses meta reasoning about refinement as compared to the refinement_rule below.\<close>
-theorem meta_refinement_rule:
-  assumes "refines_hyper_program Cs1 Cs2"
-      and "\<Turnstile> {P} [Cs2] {interp_assert Q}"
-      and "no_exists_state Q"
-    shows "\<Turnstile> {P} [Cs1] {interp_assert Q}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S
-  assume "P S"
-  with assms(2) have "interp_assert Q (sem_rel Cs2 S)"
-    by (simp add: relational_hyper_hoare_tripleE)
-  with assms(1) assms(3) meta_refinement_rule_main show "interp_assert Q (sem_rel Cs1 S)" by blast
-qed
-
-
-
-definition ref_cond where
- "ref_cond i j S = (\<forall>\<sigma>i\<in>(S i). \<exists>\<sigma>j \<in> (S j). \<sigma>i = \<sigma>j)"
-
-
-lemma refinement_rule_main:
-  assumes "\<Turnstile> {ref_cond 0 1} [[0 \<mapsto> C1, 1 \<mapsto> C2]] {ref_cond 0 1}"
-  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
-  unfolding refines_hyper_program_def
-proof (intro allI ballI)
-  fix Ss::"'a hyper_set"
-  fix i
-  let ?Ss' = "(\<lambda>i. if i = 0 then (Ss 0) else (if i = 1 then (Ss 0) else {}))" 
-  have "(ref_cond 0 1) ?Ss'" unfolding ref_cond_def by auto
-  with assms have "(ref_cond 0 1) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] ?Ss')"
-    by (simp add: relational_hyper_hoare_triple_def ref_cond_def)
-  from this show "sem_rel [0 \<mapsto> C1] Ss i \<subseteq> sem_rel [0 \<mapsto> C2] Ss i" unfolding ref_cond_def 
-    by(auto simp add:sem_rel_def)
-qed
-
-
-
-
-text\<open>Rule inspired by the wp-refine rule of LHC but instead of meta-reasoning leverages RHHL's
-      capability of directly deriving the refinement hyper-triple.\<close>
-theorem refinement_rule:
-  assumes "\<Turnstile> {ref_cond 0 1} [[0 \<mapsto> C1, 1 \<mapsto> C2]] {ref_cond 0 1}"
-      and "\<Turnstile> {P} [[0 \<mapsto> C2]] {interp_assert Q}"
-      and "no_exists_state Q"
-    shows "\<Turnstile> {P} [[0 \<mapsto> C1]] {interp_assert Q}"
-proof -
-  from assms refinement_rule_main meta_refinement_rule show ?thesis by blast
-qed
-
-
-
-
-
-fun pexp_var :: "'a pexp \<Rightarrow> nat list" where
-"pexp_var (PVar v) = [v]" 
-| "pexp_var (PConst _) = []"
-| "pexp_var (PBinop pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
-| "pexp_var (PFun _ pe) = pexp_var pe"
-
-
-fun pbexp_var :: "'a pbexp \<Rightarrow> nat list" where
-"pbexp_var (PBConst _) = []"
-| "pbexp_var (PBAnd pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
-| "pbexp_var (PBOr pb1 pb2) = (pbexp_var pb1) @ (pbexp_var pb2)"
-| "pbexp_var (PBComp pe1 _ pe2) = (pexp_var pe1) @ (pexp_var pe2)"
-
-
-text\<open>Gather all variables accessed by the program (read / written).\<close>
-fun pvar :: "'a syn_stmt \<Rightarrow> nat list" where
-"pvar (AssignS v pe) = v#(pexp_var pe)" |
-"pvar (SeqS C1 C2) = (pvar C1) @ (pvar C2)" |
-"pvar (IfS C1 C2) = (pvar C1) @ (pvar C2)" |
-"pvar (SkipS) = []" |
-"pvar (HavocS v) = [v]" |
-"pvar (AssumeS pb) = pbexp_var pb" |
-"pvar (WhileS C) = pvar C"
-
-
-
-fun refinement_syn_assert_vars :: "nat list \<Rightarrow> 'a syn_assertion" where
-"refinement_syn_assert_vars [] = (AConst True)" |
-"refinement_syn_assert_vars (v#vs) = AAnd (AComp (EPVar 1 v) (=) (EPVar 0 v)) (refinement_syn_assert_vars vs)"
-
-definition refinement_syn_assert :: "nat \<Rightarrow> nat \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_stmt \<Rightarrow> 'a syn_assertion" where
-"refinement_syn_assert i j C1 C2 = (AForallState i (AExistsState j (refinement_syn_assert_vars ((pvar C1) @ (pvar C2)))))"
-
-text\<open>Semantic version for the syntactic assertion above\<close>
-definition refinement_assert where
-"refinement_assert i j C1 C2 S = (\<forall>(li,\<sigma>i) \<in> (S i). (\<exists>(lj,\<sigma>j)\<in>(S j). (\<forall>x \<in> (set ((pvar C1) @ (pvar C2))). (\<sigma>i x) = (\<sigma>j x))))"
-
-
-lemma refinement_syn_assert_vars_sound: "(\<forall>x \<in> (set Vs). ((snd \<sigma>) x) = ((snd \<sigma>') x)) = 
-                                          sat_assertion [] [\<sigma>', \<sigma>] (refinement_syn_assert_vars Vs) S"
-proof (induction Vs)
-  case Nil
-  then show ?case by(auto)
-next
-  case (Cons a Vs)
-  then show ?case by(auto)
-qed
-
-
-lemma refinement_syn_assert_sound: "interp_assert (refinement_syn_assert i j C1 C2) S = (refinement_assert i j C1 C2) S"
-  unfolding refinement_syn_assert_def refinement_assert_def
-  apply(auto)
-   apply (smt (verit, ccfv_threshold) case_prodI2 set_append snd_conv refinement_syn_assert_vars_sound)
-  using refinement_syn_assert_vars_sound by fastforce
-
-
-text\<open>Standard definition of the refinement relation between two programs\<close>
-definition refines_program where
-"refines_program C1 C2 = (\<forall>\<sigma> \<sigma>'. \<langle>C1, \<sigma>\<rangle> \<rightarrow> \<sigma>' \<longrightarrow> \<langle>C2, \<sigma>\<rangle> \<rightarrow> \<sigma>')"
-
-
-lemma variable_preservation:
-  assumes "\<langle>interp_syn_stmt C, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-      and "x \<notin> (set (pvar C))" 
-    shows "\<sigma> x = \<sigma>' x"
-  using assms
-proof (induction C arbitrary: \<sigma> \<sigma>')
-  case (AssignS x1 x2)
-  then show ?case by(auto)
-next
-  case (SeqS C1 C2)
-  have "x \<notin> set (pvar (SeqS C1 C2)) \<Longrightarrow> x \<notin> set (pvar C1) \<and> x \<notin> set (pvar C2)" by auto
-  with SeqS show ?case
-    by (metis interp_syn_stmt.simps(2) single_sem_Seq_elim)
-next
-  case (IfS C1 C2)
-  then show ?case by auto
-next
-  case SkipS
-  then show ?case by auto
-next
-  case (HavocS x)
-  then show ?case by auto
-next
-  case (AssumeS x)
-  then show ?case by auto
-next
-  case (WhileS C)
-  then show ?case by auto
-qed
-
-lemma refinement_hyper_triple_sound:
-  assumes "\<Turnstile> {(refinement_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {(refinement_assert 0 1 C1 C2)}"
-  shows "refines_program (interp_syn_stmt C1) (interp_syn_stmt C2)"
-  unfolding refines_program_def
-proof (intro allI impI)
-  fix \<sigma> \<sigma>'
-  assume asm: "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<sigma>'"
-
-  let ?S = "\<lambda>i. (if i = 0 then {(\<sigma>,\<sigma>)} else (if i = 1 then {(\<sigma>,\<sigma>)} else {}))"
-  have "(refinement_assert 0 1 C1 C2) ?S" unfolding refinement_assert_def by(auto)
-  with assms have H: "(refinement_assert 0 1 C1 C2) (sem_rel [0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)] ?S)"
-    using relational_hyper_hoare_tripleE by blast
-  from variable_preservation have "\<And>\<phi> \<phi>'. (\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>) \<and> (\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>') \<and> (\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x) \<Longrightarrow> \<phi> = \<phi>'"
-    apply(auto)
-  proof -
-    fix \<phi> :: "nat \<Rightarrow> 'a" and \<phi>' :: "nat \<Rightarrow> 'a"
-    assume a1: "\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x"
-    assume a2: "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>'"
-    assume "\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>"
-    then have f3: "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi> n"
-      using a1 by (meson UnCI variable_preservation)
-    have "\<forall>n. \<phi> n = \<phi>' n \<or> \<sigma> n = \<phi>' n"
-      using a2 a1 by (meson UnCI variable_preservation)
-    then show "\<phi> = \<phi>'"
-      using f3 by fastforce
-  qed
-  with H asm show "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by(auto simp add:refinement_assert_def sem_rel_def sem_def)
-qed
-
-
-lemma refines_program_lifted:
-  assumes "refines_program C1 C2"
-  shows "refines_hyper_program [0 \<mapsto> C1] [0 \<mapsto> C2]"
-  unfolding refines_hyper_program_def 
-proof (intro allI)
-  fix S i 
-  from assms show "sem_rel [0 \<mapsto> C1] S i \<subseteq> sem_rel [0 \<mapsto> C2] S i" unfolding refines_program_def
-    apply(auto simp add:sem_rel_def sem_def)
-    by auto
-qed
-
-text\<open>Same as the refinement_rule but uses only syntactic hyper-assertions in the refinement hyper-triple.\<close>
-theorem refinement_syn_rule:
-  assumes "\<Turnstile> {interp_assert (refinement_syn_assert 0 1 C1 C2)} [[0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)]] {interp_assert (refinement_syn_assert 0 1 C1 C2)}"
-      and "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C2)]] {interp_assert Q}"
-      and "no_exists_state Q"
-    shows "\<Turnstile> {P} [[0 \<mapsto> (interp_syn_stmt C1)]] {interp_assert Q}"
-proof -
-  from refinement_syn_assert_sound refinement_hyper_triple_sound refines_program_lifted assms meta_refinement_rule show ?thesis
-    by (smt (verit, ccfv_threshold) relational_hyper_hoare_tripleE relational_hyper_hoare_tripleI)
-qed
-
-
-theorem if_lockstep_true_sym:
+lemma if_lockstep_true_sym:
   assumes "\<Turnstile> { conj P (holds_forall_hyper I bs)} [[ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }"
   shows "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
 proof -
@@ -6131,95 +5928,6 @@ proof (rule relational_hyper_hoare_tripleI)
   then show "reindex_assertion \<pi> Q (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
 qed
 
-
-
-lemma syn_reindexing_soundness: "reindex_assertion \<pi> (interp_assert Q) = interp_assert (reindex_syn_assertion \<pi> Q)"
-proof (induction Q)
-  case (AConst x)
-  then show ?case 
-    by (simp add: reindex_assertion_def)
-next
-  case (AComp x1a x2 x3)
-  then show ?case 
-    by (simp add: reindex_assertion_def)
-next
-  case (AForallState x1a Q)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-next
-  case (AExistsState x1a Q)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-next
-  case (AForall Q)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-next
-  case (AExists Q)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-next
-  case (AOr Q1 Q2)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-next
-  case (AAnd Q1 Q2)
-  then show ?case 
-    by (metis reindex_assertion_def reindex_both_impl(1,2))
-qed
-
-
-lemma reindexing_preserves_no_exist_state:
-  assumes "no_exists_state Q"
-  shows "no_exists_state (reindex_syn_assertion \<pi> Q)"
-  using assms
-  apply (induction Q)
-  apply(simp_all)
-  done
-
-
-
-
-section \<open>Other useful rules\<close>
-
-theorem conj_rule:
-  assumes "\<Turnstile> {P1} [Cs] {Q1}"
-      and "\<Turnstile> {P2} [Cs] {Q2}"
-    shows "\<Turnstile> {conj P1 P2} [Cs] {conj Q1 Q2}"
-proof (intro relational_hyper_hoare_tripleI)
-  fix S
-  assume "(conj P1 P2) S"
-  from \<open>(conj P1 P2) S\<close> assms(1) have H1:"Q1 (sem_rel Cs S)"
-    by (simp add: relational_hyper_hoare_tripleE conj_def)
-  from \<open>(conj P1 P2) S\<close> assms(2) have H2:"Q2 (sem_rel Cs S)"
-    by (simp add: relational_hyper_hoare_tripleE conj_def)
-  show "conj Q1 Q2 (sem_rel Cs S)"
-    by(auto simp add:conj_def H1 H2)
-qed
-
-theorem disj_rule:
-  assumes "\<Turnstile> {P1} [Cs] {Q1}"
-      and "\<Turnstile> {P2} [Cs] {Q2}"
-    shows "\<Turnstile> {disj P1 P2} [Cs] {disj Q1 Q2}"
-proof (intro relational_hyper_hoare_tripleI)
-  fix S
-  assume "disj P1 P2 S"
-  with assms have "Q1 (sem_rel Cs S) \<or> Q2 (sem_rel Cs S)"
-    unfolding disj_def relational_hyper_hoare_triple_def by auto
-  thus "disj Q1 Q2 (sem_rel Cs S)" unfolding disj_def by auto
-qed
-
-
-corollary postcondition_conj:
-  assumes "\<Turnstile> {P} [Cs] {Q1}"
-      and "\<Turnstile> {P} [Cs] {Q2}"
-    shows "\<Turnstile> {P} [Cs] {conj Q1 Q2}"
-  apply(rule cons)
-   apply(rule entail_conj)
-    apply(rule entails_refl)
-   apply(rule entails_refl)
-  apply(rule conj_rule)
-  using assms by auto
 
 
 section \<open>Mini case study\<close>
@@ -10533,5 +10241,239 @@ proof-
         by (metis fun_upd_same numeral_1_eq_Suc_0 numeral_One prems(7) snd_eqD) qed
     done
 qed
+
+
+section \<open>Reindexing\<close>
+
+
+type_synonym reindexing = "nat \<Rightarrow> nat"
+
+fun reindex_syn_assertion where
+  "reindex_syn_assertion \<pi> (AConst b) = AConst b"
+| "reindex_syn_assertion \<pi> (AComp e1 cmp e2) = AComp e1 cmp e2"
+| "reindex_syn_assertion \<pi> (AForallState n A) = AForallState (\<pi> n) (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AExistsState n A) = AExistsState (\<pi> n) (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AForall A) = AForall (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AExists A) = AExists (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AOr A B) = AOr (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
+| "reindex_syn_assertion \<pi> (AAnd A B) = AAnd (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
+
+lemma reindex_equiv:
+  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<longleftrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
+  unfolding reindex_hyper_stuff_def
+  by (induct A arbitrary: vals states) auto
+
+lemma reindex_both_impl:
+  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<Longrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
+  "sat_assertion vals states A (reindex_hyper_stuff \<pi> S) \<Longrightarrow> sat_assertion vals states (reindex_syn_assertion \<pi> A) S"
+  using reindex_equiv by blast+
+
+
+
+
+theorem reindex_rule_one_direction:
+  assumes "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q}"
+  shows "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "interp_assert (reindex_syn_assertion \<pi> P) S"
+  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
+    by (simp add: reindex_both_impl(1))
+  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
+    by (meson assms relational_hyper_hoare_triple_def)
+  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
+    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
+qed
+
+lemma reindex_bij:
+  assumes "bij \<pi>"
+  shows "P = reindex_syn_assertion \<pi> (reindex_syn_assertion (inv \<pi>) P)"
+  using assms
+  apply (induct P) apply simp_all
+  by (metis bij_inv_eq_iff)+
+
+
+theorem reindex_rule_one_direction_bij:
+  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ reindex_hyper_stuff (inv \<pi>) Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+      and "bij \<pi>"
+  shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q }"
+proof -
+  have "interp_assert P = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) P))"
+    by (metis assms(2) bij_betw_inv_into reindex_bij)
+  moreover have "interp_assert Q = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) Q))"
+    by (metis assms(2) bij_betw_inv_into reindex_bij)
+  ultimately show ?thesis
+    by (simp add: assms(1) assms(2) inv_inv_eq reindex_rule_one_direction)
+qed
+
+
+
+
+(*
+theorem reindex_rule_other_direction:
+  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+  shows "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q }"
+(* I think this one needs bijection *)
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "interp_assert P S"
+
+
+"interp_assert (reindex_syn_assertion \<pi> P) S"
+  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
+    by (simp add: reindex_both_impl(1))
+  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
+    by (meson assms relational_hyper_hoare_triple_def)
+  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
+    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
+qed
+*)
+
+
+
+(* Use case: Generalized if rule *)
+
+(*
+theorem rule_if_relational_generalized:
+  assumes "\<Turnstile> { split_with_b b k P } [ programs_if Cs C1 C2 ] {interp_assert (post_if_rel Q)}" (* Not Q here... *)
+      and "Cs k = Some (if_then_else b C1 C2)"
+    shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q}"
+proof (rule reindex_rule_one_direction_bij)
+
+  thm rule_if_relational[of b ]
+*)
+
+section \<open>Thibault's Loop rules\<close>
+
+
+fun no_exists_stateI :: "nat set \<Rightarrow> 'a syn_assertion \<Rightarrow> bool"
+  where
+  "no_exists_stateI I (AConst _) \<longleftrightarrow> True"
+| "no_exists_stateI I (AComp _ _ _) \<longleftrightarrow> True"
+| "no_exists_stateI I (AForallState _ A) \<longleftrightarrow> no_exists_stateI I A"
+| "no_exists_stateI I (AExistsState i A) \<longleftrightarrow> i \<notin> I \<and> no_exists_stateI I A"
+| "no_exists_stateI I (AForall A) \<longleftrightarrow> no_exists_stateI I A"
+| "no_exists_stateI I (AExists A) \<longleftrightarrow> no_exists_stateI I A"
+| "no_exists_stateI I (AAnd A B) \<longleftrightarrow> no_exists_stateI I A \<and> no_exists_stateI I B"
+| "no_exists_stateI I (AOr A B) \<longleftrightarrow> no_exists_stateI I A \<and> no_exists_stateI I B"
+
+
+
+lemma mono_sym_then_up_closed:
+  assumes "no_exists_stateI I A"
+      and "hyper_set_le I S S'"
+      and "sat_assertion vals states A S'"
+    shows "sat_assertion vals states A S"
+  using assms
+proof (induct A arbitrary: vals states)
+  case (AForallState i A)
+  then have "S i \<subseteq> S' i"
+    by (metis Orderings.order_eq_iff hyper_set_le_def)
+  then show ?case
+    using AForallState.hyps AForallState.prems(1) AForallState.prems(3) assms(2) by auto
+next
+  case (AExistsState i A)
+  then show ?case
+  proof (simp)
+    obtain \<phi> where "\<phi>\<in>S i" "sat_assertion vals (\<phi> # states) A S'"
+      using AExistsState(3) unfolding hyper_set_le_def
+      using AExistsState.prems(1) AExistsState.prems(3) by auto
+    then have "sat_assertion vals (\<phi> # states) A S"
+      using AExistsState(1)[OF _ AExistsState(3), of vals "\<phi> # states"]
+      using AExistsState.prems(1) by fastforce
+    then show "\<exists>\<phi>\<in>S i. sat_assertion vals (\<phi> # states) A S"
+      using \<open>\<phi> \<in> S i\<close> by blast
+  qed
+qed (auto)
+
+
+
+
+
+section \<open>General while loop from Thibault\<close>
+
+
+(* Set becomes larger for  *)
+
+
+
+definition construct_programs where
+  "construct_programs I f i = (if i \<in> I then Some (f i) else None)"
+
+
+definition holds_forall_relational where
+  "holds_forall_relational I b S \<longleftrightarrow> (\<forall>i \<in> I. \<forall>\<phi>\<in>S i. b (snd \<phi>))"
+
+
+fun iterate_sem_lifted where
+  "iterate_sem_lifted 0 _ S = S"
+| "iterate_sem_lifted (Suc n) Cs S = sem_rel Cs (iterate_sem_lifted n Cs S)"
+
+lemma relational_indexed_invariant_then_power:
+  assumes "\<And>n. relational_hyper_hoare_triple (I n) Cs (I (Suc n))"
+      and "I 0 S"
+  shows "I n (iterate_sem_lifted n Cs S)"
+  using assms
+proof (induct n arbitrary: S)
+next
+  case (Suc n)
+  then have "I n (iterate_sem_lifted n Cs S)"
+    by blast
+  then have "I (Suc n) (sem_rel Cs (iterate_sem_lifted n Cs S))"
+    using Suc.prems(1) relational_hyper_hoare_tripleE by blast
+  then show ?case
+    by (simp add: Suc.hyps Suc.prems(1))
+qed (auto)
+
+definition union_hyper_sets where
+  "union_hyper_sets A B i = A i \<union> B i"
+
+fun relational_union_up_to_n where
+  "relational_union_up_to_n C S 0 = iterate_sem_lifted 0 C S"
+| "relational_union_up_to_n C S (Suc n) = union_hyper_sets (iterate_sem_lifted (Suc n) C S) (relational_union_up_to_n C S n)"
+
+definition map_indices where
+  "map_indices I f S i = (if i \<in> I then f i (S i) else S i)"
+
+definition filter_exp_indices where
+  "filter_exp_indices I b S = map_indices I (\<lambda>i. filter_exp (lnot (b i))) S"
+
+lemma relational_iterate_sem_assume_increasing:
+  assumes "Cs = construct_programs I (\<lambda>i. if_then (b i) (C i))"
+  shows "hyper_set_le I (filter_exp_indices I b (iterate_sem_lifted n Cs S)) (filter_exp_indices I b (iterate_sem_lifted (Suc n) Cs S))"
+  apply (rule hyper_set_leI)
+  using assms unfolding hyper_set_le_def filter_exp_indices_def construct_programs_def map_indices_def
+   apply simp_all
+   apply (smt (verit) UnCI filter_exp_def if_then_sem member_filter option.sel partial_sem.elims sem_rel_def subsetI)
+  by (simp add: sem_rel_def)
+
+
+lemma relational_filter_exp_union:
+  "filter_exp_indices I b (union_hyper_sets S1 S2) = union_hyper_sets (filter_exp_indices I b S1) (filter_exp_indices I b S2)" (is "?A = ?B")
+  unfolding filter_exp_indices_def union_hyper_sets_def
+  apply (rule ext)
+  apply rule
+  by (simp_all add: filter_exp_union map_indices_def)
+
+
+(*
+lemma relational_iterate_sem_assume_increasing_union_up_to:
+  assumes "Cs = construct_programs I (\<lambda>i. if_then (b i) (C i))"
+  shows "filter_exp_indices I b (iterate_sem_lifted n Cs S) = filter_exp_indices I b (relational_union_up_to_n Cs S n)"
+
+
+theorem relational_while_general_simple:
+  assumes "\<And>n. \<Turnstile> {P n} [ construct_programs I (\<lambda>i. if_then (b i) (C i)) ] { P (Suc n) }"
+      and "\<And>n. \<Turnstile> {P n} [ construct_programs I (\<lambda>i. Assume (lnot (b i))) ] {Q n}"
+      and "relational_upwards_closed I Q Q_inf"
+
+  shows "\<Turnstile> {P 0} [ construct_programs I (\<lambda>i. while_cond (b i) (C i)) ] {conj Q_inf (\<lambda>S. \<forall>i \<in> I. \<forall>\<phi> \<in> S i. \<not> b i (snd \<phi>)) }"
+
+*)
+(* Thibault's own TODO: Think about this: *)
+
+lemma ascending_iterate_filter:
+  "ascending (\<lambda>n. filter_exp (lnot b) (union_up_to_n (if_then b C) S n))"
+  by (metis ascendingI iterate_sem_assume_increasing iterate_sem_assume_increasing_union_up_to)
+
+
 
 end
