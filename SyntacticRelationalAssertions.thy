@@ -1,506 +1,18 @@
-section \<open>Syntactic Relational Assertions\<close>
-
+text \<open>3 Proof rules\<close>
 theory SyntacticRelationalAssertions
-  imports "HHL/Loops"  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes" "HOL-Library.FuncSet"
+  imports RHHL_Logic
 begin
 
-subsection \<open>Preliminaries: Types, expressions, 'a syn_assertions\<close>
+section\<open>Preliminaries\<close>
 
-type_synonym var = nat
-type_synonym qstate = nat
-type_synonym qvar = nat
+text\<open>Map comprehension\<close>
+definition map_comprehension :: "('i \<Rightarrow> 'a) \<Rightarrow> ('i \<Rightarrow> bool) \<Rightarrow> ('i \<rightharpoonup> 'a)" where
+  "map_comprehension f P \<equiv> (\<lambda>i. if P i then Some (f i) else None)"
 
-type_synonym 'a nstate = "(var, 'a, var, 'a) state"
-type_synonym 'a npstate = "(var, 'a) pstate"
+translations
+  "[i \<mapsto> t | P]" => "CONST map_comprehension (\<lambda>i. t) (\<lambda>i. P)"
 
-type_synonym 'a binop = "'a \<Rightarrow> 'a \<Rightarrow> 'a"
-type_synonym 'a comp = "'a \<Rightarrow> 'a \<Rightarrow> bool"
-
-
-type_synonym 'a hyper_program = "nat \<rightharpoonup> (nat, 'a) stmt"
-type_synonym 'a hyper_set = "nat \<Rightarrow> 'a nstate set"
-type_synonym 'a rel_hyper_assertion = "'a hyper_set \<Rightarrow> bool"
-
-
-text \<open>Quantified variables and quantified states are represented as de Bruijn indices (natural numbers).\<close>
-
-datatype 'a exp =
-  EPVar qstate var    \<comment>\<open>\<open>\<phi>\<^sup>P(x)\<close>: Program variable\<close>
-  | ELVar qstate var  \<comment>\<open>\<open>\<phi>\<^sup>L(x)\<close>: Logical variable\<close>
-  | EQVar qvar        \<comment>\<open>\<open>y\<close>: Quantified variable\<close>
-  | EConst 'a
-  | EBinop "'a exp" "'a binop" "'a exp" \<comment>\<open>\<open>e \<oplus> e\<close>\<close>
-  | EFun "'a \<Rightarrow> 'a" "'a exp"            \<comment>\<open>\<open>f(e)\<close>\<close>
-
-text \<open>Quantified variables and quantified states are represented as de Bruijn indices (natural numbers).
-Thus, quantifiers do not have a name for the variable or state they quantify over.\<close>
-
-datatype 'a syn_assertion =
-  AConst bool
-  | AComp "'a exp" "'a comp" "'a exp"  \<comment>\<open>\<open>e \<succeq> e\<close>\<close>            
-  | AForallState nat "'a syn_assertion"        \<comment>\<open>\<open>\<forall><\<phi>>i. A\<close>\<close>  
-  | AExistsState nat "'a syn_assertion"        \<comment>\<open>\<open>\<exists><\<phi>>i. A\<close>\<close>  
-  | AForall "'a syn_assertion"             \<comment>\<open>\<open>\<forall>y. A\<close>\<close>        
-  | AExists "'a syn_assertion"             \<comment>\<open>\<open>\<exists>y. A\<close>\<close>         
-  | AOr "'a syn_assertion" "'a syn_assertion"  \<comment>\<open>\<open>A \<or> A\<close>\<close>     
-  | AAnd "'a syn_assertion" "'a syn_assertion" \<comment>\<open>\<open>A \<and> A\<close>\<close>     
-
-text \<open>We use a list of values and a list of states to track quantified values and states, respectively.\<close>
-
-fun interp_exp :: "'a list \<Rightarrow> 'a nstate list \<Rightarrow> 'a exp \<Rightarrow> 'a" where
-  "interp_exp vals states (EPVar st x) = snd (states ! st) x"
-| "interp_exp vals states (ELVar st x) = fst (states ! st) x"
-| "interp_exp vals states (EQVar x) = vals ! x"
-| "interp_exp vals states (EConst v) = v"
-| "interp_exp vals states (EBinop e1 op e2) = op (interp_exp vals states e1) (interp_exp vals states e2)"
-| "interp_exp vals states (EFun f e) = f (interp_exp vals states e)"
-
-
-
-
-fun sat_assertion :: "'a list \<Rightarrow> 'a nstate list \<Rightarrow> 'a syn_assertion \<Rightarrow> 'a hyper_set \<Rightarrow> bool" where
-  "sat_assertion vals states (AConst b) _ \<longleftrightarrow> b"
-| "sat_assertion vals states (AComp e1 cmp e2) _ \<longleftrightarrow> cmp (interp_exp vals states e1) (interp_exp vals states e2)"
-| "sat_assertion vals states (AForallState i A) S \<longleftrightarrow> (\<forall>\<phi> \<in> S i. sat_assertion vals (\<phi> # states) A S)"
-| "sat_assertion vals states (AExistsState i A) S \<longleftrightarrow> (\<exists>\<phi> \<in> S i. sat_assertion vals (\<phi> # states) A S)"
-| "sat_assertion vals states (AForall A) S \<longleftrightarrow> (\<forall>v. sat_assertion (v # vals) states A S)"
-| "sat_assertion vals states (AExists A) S \<longleftrightarrow> (\<exists>v. sat_assertion (v # vals) states A S)"
-| "sat_assertion vals states (AAnd A B) S \<longleftrightarrow> (sat_assertion vals states A S \<and> sat_assertion vals states B S)"
-| "sat_assertion vals states (AOr A B) S \<longleftrightarrow> (sat_assertion vals states A S \<or> sat_assertion vals states B S)"
-
-text \<open>Negation and implication are defined on top of this base language.\<close>
-
-definition neg_cmp :: "'a comp \<Rightarrow> 'a comp" where
-  "neg_cmp cmp v1 v2 \<longleftrightarrow> \<not> (cmp v1 v2)"
-
-fun ANot where
-  "ANot (AConst b) = AConst (\<not> b)"
-| "ANot (AComp e1 cmp e2) = AComp e1 (neg_cmp cmp) e2"
-| "ANot (AForallState i A) = AExistsState i (ANot A)"
-| "ANot (AExistsState i A) = AForallState i (ANot A)"
-| "ANot (AOr A B) = AAnd (ANot A) (ANot B)"
-| "ANot (AAnd A B) = AOr (ANot A) (ANot B)"
-| "ANot (AForall A) = AExists (ANot A)"
-| "ANot (AExists A) = AForall (ANot A)"
-
-definition AImp where
-  "AImp A B = AOr (ANot A) B"
-
-lemma sat_assertion_Not:
-  "sat_assertion vals states (ANot A) S \<longleftrightarrow> \<not>(sat_assertion vals states A S)"
-  by (induct A arbitrary: vals states) (simp_all add: neg_cmp_def)
-
-lemma sat_assertion_Imp:
-  "sat_assertion vals states (AImp A B) S \<longleftrightarrow> (sat_assertion vals states A S \<longrightarrow> sat_assertion vals states B S)"
-  by (simp add: AImp_def sat_assertion_Not)
-
-abbreviation interp_assert where "interp_assert \<equiv> sat_assertion [] []"
-
-
-
-subsection \<open>Split\<close>
-
-(* Works for every union
-\<longrightarrow> k becomes k and k + 1
-Above this is "shifted"
- *)
-fun split where
-  "split _ (AConst b) = AConst b"
-| "split _ (AComp e1 cmp e2) = AComp e1 cmp e2"
-
-| "split k (AOr A B) = AOr (split k A) (split k B)"
-| "split k (AAnd A B) = AAnd (split k A) (split k B)"
-| "split k (AForall A) = AForall (split k A)"
-| "split k (AExists A) = AExists (split k A)"
-
-| "split k (AForallState i A) = (if i = k then AAnd (AForallState k (split k A)) (AForallState (Suc k) (split k A))
-  else AForallState (if i > k then Suc i else i) (split k A))"
-| "split k (AExistsState i A) = (if i = k then AOr (AExistsState k (split k A)) (AExistsState (Suc k) (split k A))
-  else AExistsState (if i > k then Suc i else i) (split k A))"
-
-definition is_split where
-  "is_split k old_sets new_sets \<longleftrightarrow>
-  (old_sets k = new_sets k \<union> new_sets (Suc k)) \<and>
-  (\<forall>i. i < k \<longrightarrow> new_sets i = old_sets i) \<and>
-  (\<forall>i. i > Suc k \<longrightarrow> new_sets i = old_sets (i - 1))"
-
-lemma is_split_simpleE:
-  assumes "is_split k old_sets new_sets"
-  shows "old_sets k = new_sets k \<union> new_sets (Suc k)"
-  using assms unfolding is_split_def
-  by argo
-
-lemma is_split_smallerE:
-  assumes "is_split k old_sets new_sets"
-      and "i < k"
-  shows "new_sets i = old_sets i"
-  using assms unfolding is_split_def
-  by blast
-
-lemma is_split_largerE:
-  assumes "is_split k old_sets new_sets"
-      and "i > k"
-  shows "new_sets (Suc i) = old_sets i"
-  using assms unfolding is_split_def
-  by auto
-
-
-
-lemma split_soundness:
-  assumes "is_split k old_sets new_sets"
-    shows "sat_assertion vals states A old_sets \<longleftrightarrow> sat_assertion vals states (split k A) new_sets"
-  using assms
-proof (induct A arbitrary: vals states)
-  case (AForallState i A)
-  then show ?case
-    apply (cases "i = k")
-      unfolding sat_assertion.simps split.simps
-      using AForallState(1)[OF AForallState(2), of vals] is_split_simpleE[OF assms] apply fastforce
-    apply (cases "i < k")
-      unfolding sat_assertion.simps split.simps
-      using is_split_smallerE[OF assms] AForallState(1)[OF AForallState(2), of vals] apply simp
-    unfolding sat_assertion.simps split.simps
-      using assms is_split_largerE[OF assms] AForallState(1)[OF AForallState(2), of vals] by simp
-next
-  case (AExistsState i A)
-  then show ?case
-    apply (cases "i = k")
-      unfolding sat_assertion.simps split.simps
-      using AExistsState(1)[OF AExistsState(2), of vals] is_split_simpleE[OF assms] apply fastforce
-    apply (cases "i < k")
-      unfolding sat_assertion.simps split.simps
-      using is_split_smallerE[OF assms] AExistsState(1)[OF AExistsState(2), of vals] apply simp
-    unfolding sat_assertion.simps split.simps
-      using assms is_split_largerE[OF assms] AExistsState(1)[OF AExistsState(2), of vals] by simp
-qed (simp_all)
-
-
-
-
-
-
-
-
-section \<open>Semantic Relational HHL\<close>
-
-
-(*
-definition relational_hyper_hoare_triple
- ("\<Turnstile> {_} [_] {_}" [51,0,0] 81) where
-  "\<Turnstile> {P} [l] {Q} \<longleftrightarrow> (\<forall>S. P S \<longrightarrow> Q (List.map (\<lambda>p. sem (fst p) (snd p)) (zip l S)))"
-*)
-
-(* Infinite S, and then S untouched on... ? *)
-
-(* l: *partial* function from nat to programs... *)
-
-(*
-Cs: partial function
-Ss: total function
-*) 
-
-fun partial_sem where
-  "partial_sem (Some C) S = sem C S"
-| "partial_sem None S = S"
-
-definition sem_lifted :: "'a hyper_program \<Rightarrow> 'a hyper_set \<Rightarrow> 'a hyper_set" where
-  "sem_lifted Cs Ss i = partial_sem (Cs i) (Ss i)"
-
-
-definition relational_hyper_hoare_triple
-:: "'a rel_hyper_assertion \<Rightarrow> 'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> bool"
-
- ("\<Turnstile> {_} [_] {_}" [51,0,0] 81) where
-  "\<Turnstile> {P} [l] {Q} \<longleftrightarrow> (\<forall>S. P S \<longrightarrow> Q (sem_lifted l S))"
-
-(*
-List.map (\<lambda>p. sem (fst p) (snd p)) (zip l S)))"
-*)
-
-lemma relational_hyper_hoare_tripleI:
-  assumes "\<And>S. P S \<Longrightarrow> Q (sem_lifted l S)"
-  shows "\<Turnstile> {P} [l] {Q}"
-  using assms relational_hyper_hoare_triple_def
-  by blast
-
-lemma relational_hyper_hoare_tripleE:
-  assumes "\<Turnstile> {P} [l] {Q}"
-      and "P S"
-    shows "Q (sem_lifted l S)"
-  by (meson assms(1) assms(2) relational_hyper_hoare_triple_def)
-
-
-
-
-(*
-fun programs_if :: "'a hyper_program \<Rightarrow> (nat, 'a) stmt \<Rightarrow> (nat, 'a) stmt \<Rightarrow> 'a hyper_program"
-  where
-  "programs_if Cs C1 C2 0 = Some C1"
-| "programs_if Cs C1 C2 (Suc 0) = Some C2"
-| "programs_if Cs C1 C2 (Suc (Suc n)) = Cs (Suc n)"
-*)
-
-lemma set_filter_lnot:
-  "S = Set.filter (b \<circ> snd) S \<union> Set.filter (lnot b \<circ> snd) S"
-  apply rule
-  unfolding lnot_def apply simp_all
-   apply (simp add: subsetI)
-  by (simp add: Set.filter_def)
-
-
-
-
-lemma split_charact:
-  assumes "is_split 0 old_sets new_sets" (* old_sets 0 = new_sets 0 \<union> new_sets 1 *)
-      and "sat_assertion vals states (split 0 Q) new_sets"
-    shows "sat_assertion vals states Q old_sets"
-  using assms
-proof (induct arbitrary: vals states rule: split.induct)
-  case (7 A)
-  then show ?case
-    by (meson split_soundness)
-next
-  case (8 A)
-  then show ?case
-    by (meson split_soundness)
-qed (auto)
-
-
-fun split_first_set where
-  "split_first_set b S 0 = Set.filter (b \<circ> snd) (S 0)"
-| "split_first_set b S (Suc 0) = Set.filter (lnot b \<circ> snd) (S 0)"
-| "split_first_set b S (Suc (Suc n)) = S (Suc n)"
-  
-lemma charact_split_first_set:
-  shows "is_split 0 (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
-  unfolding is_split_def sem_lifted_def apply simp
-  apply (rule conjI)
-   apply (simp add:  assume_sem if_then_else_def sem_if sem_seq)
-  by (metis Suc_lessD diff_Suc_Suc gr0_conv_Suc minus_nat.diff_0 split_first_set.simps(3) zero_less_diff)
-
-
-lemma needed_for_soundness:
-  assumes "interp_assert (split 0 Q) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
-    shows "interp_assert Q (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S)"
-  using assms(1)
-  apply(auto)
-  apply (rule split_charact[rotated])
-  using charact_split_first_set apply(simp)
-  using charact_split_first_set
-  by (metis One_nat_def)
-
-fun split_at_zero where
-  "split_at_zero (AConst b) = AConst b"
-| "split_at_zero (AComp e1 cmp e2) = AComp e1 cmp e2"
-| "split_at_zero (AForallState 0 A) = AAnd (AForallState 0 (split_at_zero A)) (AForallState 1 (split_at_zero A))"
-| "split_at_zero (AForallState (Suc n) A) = AForallState (Suc (Suc n)) (split_at_zero A)"
-| "split_at_zero (AExistsState 0 A) = AOr (AExistsState 0 (split_at_zero A)) (AExistsState 1 (split_at_zero A))"
-| "split_at_zero (AExistsState (Suc n) A) = AExistsState (Suc (Suc n)) (split_at_zero A)"
-| "split_at_zero (AForall A) = AForall (split_at_zero A)"
-| "split_at_zero (AExists A) = AExists (split_at_zero A)"
-| "split_at_zero (AOr A B) = AOr (split_at_zero A) (split_at_zero B)"
-| "split_at_zero (AAnd A B) = AAnd (split_at_zero A) (split_at_zero B)"
-
-lemma split_zero_lemma: "split_at_zero P = split 0 P"
-proof (induction P)
-  case (AForallState x P)
-  then show ?case 
-  proof (cases x)
-    case 0
-    with AForallState show ?thesis by auto
-  next
-    case (Suc nat)
-    with AForallState show ?thesis by auto
-  qed
-next
-  case (AExistsState x P)
-  then show ?case 
-  proof (cases x)
-    case 0
-    with AExistsState show ?thesis by auto
-  next
-    case (Suc nat)
-    with AExistsState show ?thesis by auto
-  qed
-qed (auto)
-
-theorem if_relational_decomposition:
-  assumes "\<Turnstile> { conj (interp_assert (split_at_zero P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) } 
-              [[0 \<mapsto> C1, 1 \<mapsto> C2]] 
-              {interp_assert (split_at_zero Q)}"
-  shows "\<Turnstile> { interp_assert P } [[0 \<mapsto> if_then_else b C1 C2]] {interp_assert Q}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume asm0: "interp_assert P S"
-
-  let ?S = "split_first_set b S"
-
-  have "conj (interp_assert (split 0 P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) ?S"
-    unfolding  conj_def apply simp_all
-    apply (rule conjI)
-     defer
-     apply (simp add: holds_forall_def lnot_def)
-  proof -
-    have "is_split 0 S ?S"
-      unfolding is_split_def apply simp_all
-      apply (rule conjI)
-       apply (simp add: set_filter_lnot)
-       apply (rule allI)
-       apply (case_tac "i = 0")
-        apply simp
-       apply (case_tac "i = Suc 0")
-       apply simp_all
-      by (metis One_nat_def bot_nat_0.not_eq_extremum diff_Suc_1 split_first_set.elims)
-    then show "interp_assert (split 0 P) ?S" using split_soundness[of 0 S ?S "[]" "[]" P]
-      using asm0 by blast
-  qed
-  then have "interp_assert (split 0 Q) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] ?S)"
-    using assms(1) unfolding relational_hyper_hoare_triple_def
-    by(simp only: split_zero_lemma)
-  then show "interp_assert Q (sem_lifted [0 \<mapsto> if_then_else b C1 C2] S)"
-    using needed_for_soundness by blast
-qed
-
-
-
-
-
-
-section \<open>Extending (or Projecting)\<close>
-
-
-lemma sem_lifted_on_disjoint_maps_seq:
-  assumes "dom Cs \<inter> dom Cs' = {}"
-  shows "sem_lifted (Cs ++ Cs') S = sem_lifted Cs' (sem_lifted Cs S)"
-  unfolding sem_lifted_def
-  by (metis (no_types, opaque_lifting) assms disjoint_insert(1) domIff insert_absorb map_add_dom_app_simps(1) map_add_dom_app_simps(3) partial_sem.simps(2))
-
-
-theorem rel_extension:
-  assumes "\<Turnstile> { P } [ Cs ] { R }"
-      and "\<Turnstile> { R } [ Cs' ] { Q }"
-      and "dom Cs \<inter> dom Cs' = {}"
-    shows "\<Turnstile> { P } [ Cs ++ Cs' ] { Q }"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "P S"
-  then show "Q (sem_lifted (Cs ++ Cs') S)"
-    by (metis assms(1) assms(2) assms(3) relational_hyper_hoare_triple_def sem_lifted_on_disjoint_maps_seq)
-qed
-
-
-
-
-section \<open>Reindexing\<close>
-
-
-
-
-
-type_synonym reindexing = "nat \<Rightarrow> nat"
-
-fun reindex_syn_assertion where
-  "reindex_syn_assertion \<pi> (AConst b) = AConst b"
-| "reindex_syn_assertion \<pi> (AComp e1 cmp e2) = AComp e1 cmp e2"
-| "reindex_syn_assertion \<pi> (AForallState n A) = AForallState (\<pi> n) (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AExistsState n A) = AExistsState (\<pi> n) (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AForall A) = AForall (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AExists A) = AExists (reindex_syn_assertion \<pi> A)"
-| "reindex_syn_assertion \<pi> (AOr A B) = AOr (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
-| "reindex_syn_assertion \<pi> (AAnd A B) = AAnd (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
-
-definition reindex_hyper_stuff where
-  "reindex_hyper_stuff \<pi> S n = S (\<pi> n)"
-
-lemma reindex_equiv:
-  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<longleftrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
-  unfolding reindex_hyper_stuff_def
-  by (induct A arbitrary: vals states) auto
-
-lemma reindex_both_impl:
-  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<Longrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
-  "sat_assertion vals states A (reindex_hyper_stuff \<pi> S) \<Longrightarrow> sat_assertion vals states (reindex_syn_assertion \<pi> A) S"
-  using reindex_equiv by blast+
-
-lemma sem_lifted_reindex:
-  "reindex_hyper_stuff \<pi> (sem_lifted Cs S) = sem_lifted (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S)"
-  apply (rule ext)
-  by (simp add: reindex_hyper_stuff_def sem_lifted_def)
-
-
-theorem reindex_rule_one_direction:
-  assumes "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q}"
-  shows "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "interp_assert (reindex_syn_assertion \<pi> P) S"
-  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
-    by (simp add: reindex_both_impl(1))
-  then have "interp_assert Q (sem_lifted (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
-    by (meson assms relational_hyper_hoare_triple_def)
-  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_lifted Cs S)"
-    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
-qed
-
-lemma reindex_bij:
-  assumes "bij \<pi>"
-  shows "P = reindex_syn_assertion \<pi> (reindex_syn_assertion (inv \<pi>) P)"
-  using assms
-  apply (induct P) apply simp_all
-  by (metis bij_inv_eq_iff)+
-
-
-theorem reindex_rule_one_direction_bij:
-  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ reindex_hyper_stuff (inv \<pi>) Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-      and "bij \<pi>"
-  shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q }"
-proof -
-  have "interp_assert P = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) P))"
-    by (metis assms(2) bij_betw_inv_into reindex_bij)
-  moreover have "interp_assert Q = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) Q))"
-    by (metis assms(2) bij_betw_inv_into reindex_bij)
-  ultimately show ?thesis
-    by (simp add: assms(1) assms(2) inv_inv_eq reindex_rule_one_direction)
-qed
-
-
-
-
-(*
-theorem reindex_rule_other_direction:
-  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
-  shows "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q }"
-(* I think this one needs bijection *)
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "interp_assert P S"
-
-
-"interp_assert (reindex_syn_assertion \<pi> P) S"
-  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
-    by (simp add: reindex_both_impl(1))
-  then have "interp_assert Q (sem_lifted (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
-    by (meson assms relational_hyper_hoare_triple_def)
-  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_lifted Cs S)"
-    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
-qed
-*)
-
-
-
-(* Use case: Generalized if rule *)
-
-(*
-theorem rule_if_relational_generalized:
-  assumes "\<Turnstile> { split_with_b b k P } [ programs_if Cs C1 C2 ] {interp_assert (post_if_rel Q)}" (* Not Q here... *)
-      and "Cs k = Some (if_then_else b C1 C2)"
-    shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q}"
-proof (rule reindex_rule_one_direction_bij)
-
-  thm rule_if_relational[of b ]
-*)
-
-
-
-
-section \<open>Generalized Lockstep Seq\<close>
-
+text\<open>Hyper sequence\<close>
 fun seq_opt where
   "seq_opt (Some C1) (Some C2) = Some (C1;; C2)"
 | "seq_opt (Some C1) None = Some C1"
@@ -510,12 +22,191 @@ definition hyper_seq (infixr ";;\<^sub>H" 60) where
   "hyper_seq Cs Cs' n = seq_opt (Cs n) (Cs' n)"
 
 lemma sem_lifted_hyper_seq:
-  "sem_lifted Cs' (sem_lifted Cs S) = sem_lifted (hyper_seq Cs Cs') S"
-  unfolding sem_lifted_def hyper_seq_def
+  "sem_rel Cs' (sem_rel Cs S) = sem_rel (hyper_seq Cs Cs') S"
+  unfolding sem_rel_def hyper_seq_def
   apply (rule ext)
   apply (case_tac "Cs i"; case_tac "Cs' i")
      apply simp_all
   using sem_seq by blast
+
+text\<open>\<box>_I p\<close>
+definition holds_forall_hyper where
+  "holds_forall_hyper I bs S \<longleftrightarrow> (\<forall>i\<in>I. \<forall>\<phi>\<in>(S i). (bs i) (snd \<phi>))"
+
+text\<open>low_I p\<close>
+definition low_exp_hyper where
+  "low_exp_hyper I es S = (\<forall>i\<in>I. \<forall>i'\<in>I. \<forall>\<phi> \<phi>'. (\<phi> \<in> (S i) \<and> \<phi>' \<in> (S i')) \<longrightarrow> ((es i) (snd \<phi>) = (es i') (snd \<phi>')))"
+
+text\<open>(\<not>b)(i)(\<sigma>) \<triangleq> \<not>(b(i)(\<sigma>))\<close>
+definition lnot_hyper where
+  "lnot_hyper bs i \<sigma> = (\<not>(bs i) \<sigma>)"
+
+lemma low_exp_either: "(low_exp_hyper I bs) S \<Longrightarrow> (holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S)"
+  by (smt (verit) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
+
+lemma either_low_exp: "(holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S) \<Longrightarrow> low_exp_hyper I bs S"
+  by (smt (verit, del_insts) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
+
+corollary low_exp_equiv: "(low_exp_hyper I bs) = disj (holds_forall_hyper I bs) (holds_forall_hyper I (lnot_hyper bs))"
+  unfolding disj_def
+  apply(rule)
+  using low_exp_either either_low_exp by blast
+
+text\<open>Definitions of \<box>_i p and (\<not>b)(\<sigma>) can be found in HHL/Loops as holds_forall and lnot\<close>
+
+text\<open>Definitions of conjunction, disjunction and entailment of hyper-assertions and also relational hyper-assertions can be found in 
+     HHL/Logic as conj, disj and entails\<close>
+
+text\<open>Defintions of the if-else and while commands you can find in HHL/Loops as if_then_else and while_cond\<close>
+
+text\<open>Definition of the if command
+    - the missing else branch is represented with the Skip command\<close>
+definition if_then_else_skip where
+"if_then_else_skip b C = if_then_else b C Skip "
+
+notation if_then_else  ("IF _ THEN _ ELSE _" [0, 0, 61] 61)
+notation if_then_else_skip  ("IF _  THEN _ FI" [0, 60] 61)
+notation while_cond  ("WHILE _ DO _" [0, 61] 61)
+
+
+section \<open>3.2 Basic rules\<close>
+subsection \<open>3.2.1 Consequence and true-false rules\<close>
+theorem cons:
+  assumes "entails P P'"
+      and "entails Q' Q"
+      and "\<Turnstile> {P'} [C] {Q'}"
+    shows "\<Turnstile> {P} [C] {Q}"
+  by (metis assms(1,2,3) entails_def relational_hyper_hoare_triple_def)
+
+corollary cons_prec:
+  assumes "entails P P'"
+      and "\<Turnstile> {P'} [C] {Q}"
+    shows "\<Turnstile> {P} [C] {Q}"
+  apply(rule cons)
+  using assms apply simp
+   apply(rule entails_refl)
+  using assms by simp
+
+corollary cons_post:
+  assumes "entails Q' Q"
+      and "\<Turnstile> {P} [C] {Q'}"
+    shows "\<Turnstile> {P} [C] {Q}"
+  apply(rule cons)
+   apply(rule entails_refl)
+  using assms apply simp
+  using assms by simp
+
+
+theorem false:
+  shows "\<Turnstile> {(\<lambda>S. False)} [Cs] {Q}"
+proof (intro relational_hyper_hoare_tripleI)
+  fix S
+  assume "False"
+  thus "Q (sem_rel Cs S)" by auto
+qed
+
+theorem true:
+  shows "\<Turnstile> {P} [Cs] {(\<lambda>S. True)}"
+  by (simp add: relational_hyper_hoare_tripleI)
+
+
+subsection\<open>3.2.2 Lockstep rules\<close>
+
+abbreviation assign_hyper_set where
+"assign_hyper_set I Xs Es S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := (Es i) \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> (S i) } else S i))"
+
+abbreviation assign_prec where
+"assign_prec P I Xs Es S \<equiv> P (assign_hyper_set I Xs Es S)"
+
+theorem assign_lockstep:
+  shows "\<Turnstile>  { assign_prec P I Xs Es} [[i \<mapsto> Assign (Xs i) (Es i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "assign_prec P I Xs Es S"
+  have "assign_hyper_set I Xs Es S = (sem_rel [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)"
+  proof
+    fix i
+    show "assign_hyper_set I Xs Es S i = (sem_rel [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S) i"
+      by(auto simp add:sem_rel_def map_comprehension_def sem_def intro:SemAssign)
+  qed
+  with asm show "P (sem_rel [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)" by auto
+qed
+
+
+abbreviation assume_hyper_set where
+"assume_hyper_set I Bs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>) |l \<sigma>. (l, \<sigma>) \<in> (S i) \<and> (Bs i) \<sigma>} else S i))"
+
+abbreviation assume_prec where
+"assume_prec P I Bs S \<equiv> P (assume_hyper_set I Bs S)"
+
+theorem assume_lockstep:
+  shows "\<Turnstile>  { assume_prec P I Bs} [[i \<mapsto> Assume (Bs i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "assume_prec P I Bs S"
+  have "(assume_hyper_set I Bs S) = (sem_rel [i \<mapsto> Assume (Bs i) |i \<in> I] S)"
+  proof
+    fix i
+    show "(assume_hyper_set I Bs S) i = (sem_rel [i \<mapsto> Assume (Bs i) |i \<in> I] S) i"
+      by(auto simp add:sem_rel_def map_comprehension_def sem_def intro:SemAssume)
+  qed
+  with asm show "P (sem_rel [i \<mapsto> Assume (Bs i) |i \<in> I] S)" by auto
+qed
+
+
+abbreviation havoc_hyper_set where
+"havoc_hyper_set I Xs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := v)) |l \<sigma> v. (l, \<sigma>) \<in> (S i) } else S i))"
+
+abbreviation havoc_prec where
+"havoc_prec P I Xs S \<equiv> P (havoc_hyper_set I Xs S)"
+
+theorem havoc_lockstep:
+  shows "\<Turnstile>  { havoc_prec P I Xs } [[i \<mapsto> Havoc (Xs i) |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume asm: "havoc_prec P I Xs S"
+  have "havoc_hyper_set I Xs S = (sem_rel [i \<mapsto> Havoc (Xs i) |i \<in> I] S)"
+  proof
+    fix i
+    show "havoc_hyper_set I Xs S i = (sem_rel [i \<mapsto> Havoc (Xs i) |i \<in> I] S) i"
+      by(auto simp add:sem_rel_def map_comprehension_def sem_def intro:SemHavoc)
+  qed
+  with asm show "P (sem_rel [i \<mapsto> Havoc (Xs i) |i \<in> I] S)" by auto
+qed
+
+
+theorem skip_lockstep:
+  shows "\<Turnstile> {P} [[i \<mapsto> Skip |i \<in> I]] {P}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "P S"
+  have eq:"(sem_rel (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S) = S"
+    apply(rule) using SemSkip
+    by(auto simp add:sem_rel_def map_comprehension_def sem_def)
+  show "P (sem_rel (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S)"
+    apply(simp only:eq) using \<open>P S\<close> by auto
+qed
+
+
+subsection\<open>3.2.3 Extension and associativity rules\<close>
+
+lemma sem_lifted_on_disjoint_maps_seq:
+  assumes "dom Cs \<inter> dom Cs' = {}"
+  shows "sem_rel (Cs ++ Cs') S = sem_rel Cs' (sem_rel Cs S)"
+  unfolding sem_rel_def
+  by (metis (no_types, opaque_lifting) assms disjoint_insert(1) domIff insert_absorb map_add_dom_app_simps(1) map_add_dom_app_simps(3) partial_sem.simps(2))
+
+theorem rel_extension:
+  assumes "\<Turnstile> { P } [ Cs ] { R }"
+      and "\<Turnstile> { R } [ Cs' ] { Q }"
+      and "dom Cs \<inter> dom Cs' = {}"
+    shows "\<Turnstile> { P } [ Cs ++ Cs' ] { Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "P S"
+  then show "Q (sem_rel (Cs ++ Cs') S)"
+    by (metis assms(1) assms(2) assms(3) relational_hyper_hoare_triple_def sem_lifted_on_disjoint_maps_seq)
+qed
+
 
 theorem seq_extension:
   assumes "\<Turnstile> { P } [ Cs ] { R }"
@@ -523,16 +214,17 @@ theorem seq_extension:
     shows "\<Turnstile> { P } [ hyper_seq Cs Cs' ] { Q }"
 proof (rule relational_hyper_hoare_tripleI)
   fix S assume "P S"
-  then have "R (sem_lifted Cs S)"
+  then have "R (sem_rel Cs S)"
     by (meson assms(1) relational_hyper_hoare_triple_def)
-  then have "Q (sem_lifted Cs' (sem_lifted Cs S))"
+  then have "Q (sem_rel Cs' (sem_rel Cs S))"
     by (meson assms(2) relational_hyper_hoare_triple_def)
-  then show "Q (sem_lifted (hyper_seq Cs Cs') S)"
+  then show "Q (sem_rel (hyper_seq Cs Cs') S)"
     by (simp add: sem_lifted_hyper_seq)
 qed
 
 
-corollary rel_extension_by_lockstep_seq:
+text\<open>Proof that RelExt is a corollary of SeqExt\<close>
+corollary rel_extension_by_seq_extension:
   assumes "\<Turnstile> { P } [ Cs ] { R }"
       and "\<Turnstile> { R } [ Cs' ] { Q }"
       and "dom Cs \<inter> dom Cs' = {}"
@@ -548,9 +240,41 @@ proof -
   with seq_extension show ?thesis using assms(1) assms(2) by auto
 qed
 
-subsection \<open>Assume rule\<close>
 
-(* Do it for 0! *)
+lemma seq_associativity_main:
+  shows "sem_rel (Cs1;;\<^sub>HCs2;;\<^sub>HCs3) S = sem_rel ((Cs1;;\<^sub>HCs2);;\<^sub>HCs3) S"
+proof 
+  fix i
+  show "sem_rel (Cs1 ;;\<^sub>H Cs2 ;;\<^sub>H Cs3) S i = sem_rel ((Cs1 ;;\<^sub>H Cs2) ;;\<^sub>H Cs3) S i"
+    apply(auto simp add:sem_rel_def hyper_seq_def)
+     apply(cases "Cs1 i")
+      apply(auto)
+     apply(cases "Cs2 i")
+      apply(auto)
+     apply(cases "Cs3 i")
+      apply(auto simp add:sem_def)
+    using SemSeq apply blast
+     apply(cases "Cs1 i")
+      apply(auto)
+     apply(cases "Cs2 i")
+      apply(auto)
+     apply(cases "Cs3 i")
+      apply(auto simp add:sem_def)
+    using SemSeq apply blast
+    done
+qed
+  
+
+theorem seq_associativity:
+  shows "\<Turnstile> {P} [Cs1;;\<^sub>HCs2;;\<^sub>HCs3] {Q} = \<Turnstile> {P} [(Cs1;;\<^sub>HCs2);;\<^sub>HCs3] {Q} "
+  unfolding relational_hyper_hoare_triple_def
+  by(simp only: seq_associativity_main)
+
+
+
+subsection \<open>3.2.4 Syntactic rules\<close>
+
+subsubsection\<open>AssumeS\<close>
 
 fun transform_assume :: "'a syn_assertion \<Rightarrow> 'a syn_assertion \<Rightarrow> 'a syn_assertion" where
   "transform_assume _ (AConst b) = AConst b"
@@ -578,6 +302,19 @@ lemma same_syn_semI:
 fun map_zero where
   "map_zero f S 0 = f (S 0)"
 | "map_zero _ S (Suc n) = S (Suc n)"
+
+
+lemma pexp_to_exp_same:
+  shows "same_syn_sem (pbexp_to_assertion 0 pb) (interp_pbexp pb)"
+proof (rule same_syn_semI)
+  fix states :: "'a nstate list"
+  fix vals S
+  assume "0 < length states"
+  then have "sat_assertion vals states (pbexp_to_assertion 0 pb) S = sat_assertion [] states (pbexp_to_assertion 0 pb) S"
+    using same_syn_sem_assertion by blast
+  then show "interp_pbexp pb (snd (hd states)) = sat_assertion vals states (pbexp_to_assertion 0 pb) S"
+    by (metis \<open>0 < length states\<close> hd_conv_nth length_greater_0_conv same_syn_sem_assertion)
+qed
 
 lemma transform_assume_valid:
   assumes "same_syn_sem bsyn bsem"
@@ -662,99 +399,19 @@ next
     using calculation transform_assume.simps(4) by fastforce
 qed (simp_all)
 
-
-
-
-
-
-subsubsection \<open>Program expressions (values)\<close>
-
-datatype 'a pexp =
-  PVar var \<comment>\<open>Normal variable, like x\<close>
-  | PConst 'a
-  | PBinop "'a pexp" "'a binop" "'a pexp"
-  | PFun "'a \<Rightarrow> 'a" "'a pexp"
-
-
-fun interp_pexp :: "'a pexp \<Rightarrow> 'a npstate \<Rightarrow> 'a"
-  where
-  "interp_pexp (PVar x) \<phi> = \<phi> x"
-| "interp_pexp (PConst n) _ = n"
-| "interp_pexp (PBinop p1 op p2) \<phi> = op (interp_pexp p1 \<phi>) (interp_pexp p2 \<phi>)"
-| "interp_pexp (PFun f p) \<phi> = f (interp_pexp p \<phi>)"
-
-fun pexp_to_exp where
-  "pexp_to_exp st (PVar x) = EPVar st x"
-| "pexp_to_exp _ (PConst n) = EConst n"
-| "pexp_to_exp st (PBinop p1 op p2) = EBinop (pexp_to_exp st p1) op (pexp_to_exp st p2)"
-| "pexp_to_exp st (PFun f p) = EFun f (pexp_to_exp st p)"
-
-lemma same_syn_sem_exp:
-  "interp_pexp p (snd (states ! st)) = interp_exp vals states (pexp_to_exp st p)"
-proof (induct p)
-  case (PVar x)
-  then show ?case
-    using hd_conv_nth by force
-qed (simp_all)
-
-
-subsubsection \<open>Program expressions (booleans)\<close>
-
-datatype 'a pbexp =
-  PBConst bool
-  | PBAnd "'a pbexp" "'a pbexp"
-  | PBOr "'a pbexp" "'a pbexp"
-  | PBComp "'a pexp" "'a comp" "'a pexp"
-
-fun interp_pbexp :: "'a pbexp \<Rightarrow> 'a npstate \<Rightarrow> bool"
-  where
-  "interp_pbexp (PBConst b) _ \<longleftrightarrow> b"
-| "interp_pbexp (PBAnd pb1 pb2) \<phi> \<longleftrightarrow> interp_pbexp pb1 \<phi> \<and> interp_pbexp pb2 \<phi>"
-| "interp_pbexp (PBOr pb1 pb2) \<phi> \<longleftrightarrow> interp_pbexp pb1 \<phi> \<or> interp_pbexp pb2 \<phi>"
-| "interp_pbexp (PBComp p1 cmp p2) \<phi> \<longleftrightarrow> cmp (interp_pexp p1 \<phi>) (interp_pexp p2 \<phi>)"
-
-fun pbexp_to_assertion where
-  "pbexp_to_assertion _ (PBConst b) = AConst b"
-| "pbexp_to_assertion st (PBAnd pb1 pb2) = AAnd (pbexp_to_assertion st pb1) (pbexp_to_assertion st pb2)"
-| "pbexp_to_assertion st (PBOr pb1 pb2) = AOr (pbexp_to_assertion st pb1) (pbexp_to_assertion st pb2)"
-| "pbexp_to_assertion st (PBComp p1 cmp p2) = AComp (pexp_to_exp st p1) cmp (pexp_to_exp st p2)"
-
-lemma same_syn_sem_assertion:
-  "interp_pbexp pb (snd (states ! st)) = sat_assertion vals states (pbexp_to_assertion st pb) S"
-proof (induct pb)
-  case (PBComp x1 x2 x3)
-  then show ?case
-    by (metis interp_pbexp.simps(4) pbexp_to_assertion.simps(4) same_syn_sem_exp sat_assertion.simps(2))
-qed (simp_all)
-
-lemma pexp_to_exp_same:
-  shows "same_syn_sem (pbexp_to_assertion 0 pb) (interp_pbexp pb)"
-proof (rule same_syn_semI)
-  fix states :: "'a nstate list"
-  fix vals S
-  assume "0 < length states"
-  then have "sat_assertion vals states (pbexp_to_assertion 0 pb) S = sat_assertion [] states (pbexp_to_assertion 0 pb) S"
-    using same_syn_sem_assertion by blast
-  then show "interp_pbexp pb (snd (hd states)) = sat_assertion vals states (pbexp_to_assertion 0 pb) S"
-    by (metis \<open>0 < length states\<close> hd_conv_nth length_greater_0_conv same_syn_sem_assertion)
-qed
-
-
 lemma sem_lifted_map_zero:
-  "sem_lifted [0 \<mapsto> C] S = map_zero (sem C) S"
-  unfolding sem_lifted_def
+  "sem_rel [0 \<mapsto> C] S = map_zero (sem C) S"
+  unfolding sem_rel_def
   apply (rule ext)
   by (case_tac i) simp_all
 
-subsubsection \<open>Syntactic rule for assume\<close>
-
-theorem rule_assume_syntactic_general:
+lemma rule_assume_syntactic_general:
   "\<Turnstile> { sat_assertion vals states (transform_assume (pbexp_to_assertion 0 pb) P) } [ [0 \<mapsto> Assume (interp_pbexp pb)] ] {sat_assertion vals states P}"
 proof (rule relational_hyper_hoare_tripleI)
   fix S assume asm0: "sat_assertion vals states (transform_assume (pbexp_to_assertion 0 pb) P) S"
   then have "sat_assertion vals states P (map_zero (Set.filter (interp_pbexp pb \<circ> snd)) S)"
     using pexp_to_exp_same transform_assume_valid by blast
-  then show "sat_assertion vals states P (sem_lifted [0 \<mapsto> Assume (interp_pbexp pb)] S)"
+  then show "sat_assertion vals states P (sem_rel [0 \<mapsto> Assume (interp_pbexp pb)] S)"
   proof -
     have "\<forall>p r. sem (Assume p) (r::((nat \<Rightarrow> 'a) \<times> (nat \<Rightarrow> 'a)) set) = Set.filter (p \<circ> snd) r"
       using assume_sem by blast
@@ -764,41 +421,12 @@ proof (rule relational_hyper_hoare_tripleI)
   qed
 qed
 
-
-
 theorem assumeS_rel:
   "\<Turnstile> { interp_assert (transform_assume (pbexp_to_assertion 0 pb) P) } [ [0 \<mapsto> Assume (interp_pbexp pb)] ] {interp_assert P}"
   by (simp add: rule_assume_syntactic_general)
 
 
-
-
-
-
-section \<open>Progress only one\<close>
-
-corollary progress_any:
-  assumes "Cs i = Some (C1;; C2)"
-      and "\<Turnstile> {P} [ [i \<mapsto> C1] ] {R}"
-      and "\<Turnstile> {R} [ Cs(i \<mapsto> C2) ] {Q}"
-    shows "\<Turnstile> {P} [ Cs ] {Q}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S assume "P S"
-  moreover have "Cs = hyper_seq [i \<mapsto> C1] (Cs(i \<mapsto> C2))"
-    unfolding hyper_seq_def
-    apply (rule ext)
-    apply (case_tac "n = i")
-    by (simp_all add: assms)
-  ultimately show "Q (sem_lifted Cs S)"
-    using seq_extension[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
-    by (metis assms(2) assms(3) relational_hyper_hoare_triple_def)
-qed
-
-
-
-subsection \<open>Havoc rule\<close>
-
-subsubsection \<open>Shifting variables\<close>
+subsubsection\<open>HavocS\<close>
 
 fun insert_at where
   "insert_at 0 x l = x # l"
@@ -955,9 +583,6 @@ next
 qed (simp_all)
 
 
-
-subsubsection \<open>Expressions (Boolean and values)\<close>
-
 definition update_state where
   "update_state \<phi> x v = (fst \<phi>, (snd \<phi>)(x := v))"
 
@@ -977,14 +602,11 @@ lemma wf_subst_exp:
   using assms
   by (induct e) simp_all
 
-
-
 lemma subst_exp_single_charact:
   assumes "interp_exp vals states e' = snd (states ! st) x"
   shows "interp_exp vals states (subst_exp_single st x e' e) = interp_exp vals states e"
   using assms
   by (induct e) simp_all
-
 
 definition subst_state where
   "subst_state x pe \<phi> = (fst \<phi>, (snd \<phi>)(x := interp_pexp pe (snd \<phi>)))"
@@ -1035,8 +657,6 @@ next
 qed (simp_all)
 
 
-subsubsection \<open>Assertions\<close>
-
 fun subst_assertion_single :: "qstate \<Rightarrow> var \<Rightarrow> 'a exp \<Rightarrow> 'a syn_assertion \<Rightarrow> 'a syn_assertion" where
   "subst_assertion_single st x e (AConst b) = AConst b"
 | "subst_assertion_single st x e (AComp e1 cmp e2) = AComp (subst_exp_single st x e e1) cmp (subst_exp_single st x e e2)"
@@ -1058,9 +678,7 @@ fun wf_assertion_aux :: "nat \<Rightarrow> nat \<Rightarrow> 'a syn_assertion \<
 | "wf_assertion_aux nv ns (AForallState _ A) \<longleftrightarrow> wf_assertion_aux nv (Suc ns) A"
 | "wf_assertion_aux nv ns (AExistsState _ A) \<longleftrightarrow> wf_assertion_aux nv (Suc ns) A"
 
-
 abbreviation wf_assertion where "wf_assertion \<equiv> wf_assertion_aux 0 0"
-
 
 lemma wf_shift_vars:
   assumes "wf_assertion_aux nv ns A"
@@ -1121,7 +739,6 @@ next
 qed (simp_all)
 
 
-
 lemma update_state_at_cons:
   "update_state_at (\<phi> # states) (Suc n) x v = \<phi> # update_state_at states n x v"
   by (simp add: update_state_at_def)
@@ -1169,10 +786,6 @@ next
   then show ?case
     by (metis AExists.hyps AExists.prems(1) AExists.prems(2) insert_at.simps(1) sat_assertion.simps(6) shift_vars_exp_charact zero_le)
 qed (simp_all)
-
-
-subsubsection \<open>Transformation for havoc\<close>
-
 
 (* Only for i = 0 *)
 fun transform_havoc where
@@ -1227,8 +840,6 @@ proof
     using assms by blast
 qed
 
-
-(* TODO: only update 0 *)
 
 lemma equiv_havoc_transform:
   assumes "S' = map_zero (\<lambda>S. { update_state \<phi> x v |\<phi> v. \<phi> \<in> S}) S"
@@ -1316,11 +927,7 @@ sat_assertion (v # vals) (insert_at 0 (update_state \<phi> x v) states) (subst_a
 qed (simp_all)
 
 
-
-
-subsubsection \<open>Syntactic rule for havoc\<close>
-
-theorem rule_havoc_syntactic_general:
+lemma rule_havoc_syntactic_general:
   "\<Turnstile> { sat_assertion states vals (transform_havoc x P) } [ [0 \<mapsto> Havoc x] ] {sat_assertion states vals P}"
 proof (rule relational_hyper_hoare_tripleI)
   fix S assume asm0: "sat_assertion states vals (transform_havoc x P) S"
@@ -1333,7 +940,7 @@ proof (rule relational_hyper_hoare_tripleI)
        apply simp_all
       by (simp add: sem_havoc_bis update_state_def)
   qed
-  then show "sat_assertion states vals P (sem_lifted [0 \<mapsto> Havoc x] S)"
+  then show "sat_assertion states vals P (sem_rel [0 \<mapsto> Havoc x] S)"
     by (simp add: asm0 sem_lifted_map_zero)
 qed
 
@@ -1344,18 +951,9 @@ theorem havocS_rel:
 
 
 
+subsubsection\<open>AssignS\<close>
 
-
-
-
-
-
-
-
-subsection \<open>Assignment rule\<close>
-
-subsubsection \<open>Program expressions\<close>
-
+text \<open>Program expressions\<close>
 fun subst_pexp :: "var \<Rightarrow> 'a pexp \<Rightarrow> 'a pexp \<Rightarrow> 'a pexp" where
   "subst_pexp x e (PVar y) = (if x = y then e else PVar y)"
 | "subst_pexp x e (PBinop p1 op p2) = PBinop (subst_pexp x e p1) op (subst_pexp x e p2)"
@@ -1386,9 +984,7 @@ proof (induct pb)
 qed (simp_all)
 
 
-subsubsection \<open>Expressions (Boolean and values)\<close>
-
-
+text \<open>Expressions (Boolean and values)\<close>
 definition subst_all_states where
   "subst_all_states x pe states = map (subst_state x pe) states"
 
@@ -1449,8 +1045,7 @@ qed (simp_all)
 
 
 
-subsubsection \<open>Assertions\<close>
-
+text \<open>Assertions\<close>
 (* only for 0 *)
 fun transform_assign where
   "transform_assign x pe (AForallState 0 A) = AForallState 0 (subst_assertion_single 0 x (pexp_to_exp 0 pe) (transform_assign x pe A))"
@@ -1486,8 +1081,6 @@ next
 qed (simp_all)
 
 
-subsubsection \<open>Syntactic rule for assignments\<close>
-
 lemma subst_state_equiv_def:
   "{(l, \<sigma>(x := interp_pexp pe \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> S} = subst_state x pe ` S" (is "?A = ?B")
 proof
@@ -1504,7 +1097,7 @@ proof
 qed
 
 
-theorem rule_assign_syntactic_general:
+lemma rule_assign_syntactic_general:
   "\<Turnstile> { sat_assertion vals states (transform_assign x pe P) } [ [0 \<mapsto> Assign x (interp_pexp pe)] ] {sat_assertion vals states P}"
   apply (rule relational_hyper_hoare_tripleI)
   using transform_assign_works[of vals states x pe P] subst_state_equiv_def[of x pe]
@@ -1517,7 +1110,7 @@ proof -
     by (simp add: \<open>\<And>S. {(l, \<sigma>(x := interp_pexp pe \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> S} = subst_state x pe ` S\<close> sem_assign)
   then have "sat_assertion vals states P (map_zero (sem (Assign x (interp_pexp pe))) S)"
     using f1 by presburger
-  then show "sat_assertion vals states P (sem_lifted [0 \<mapsto> Assign x (interp_pexp pe)] S)"
+  then show "sat_assertion vals states P (sem_rel [0 \<mapsto> Assign x (interp_pexp pe)] S)"
     by (simp add: sem_lifted_map_zero)
 qed
 
@@ -1531,7 +1124,366 @@ theorem assignS_rel:
 
 
 
-subsection \<open>Thibault's Loop rules\<close>
+section \<open>Split\<close>
+
+fun split where
+  "split _ (AConst b) = AConst b"
+| "split _ (AComp e1 cmp e2) = AComp e1 cmp e2"
+
+| "split k (AOr A B) = AOr (split k A) (split k B)"
+| "split k (AAnd A B) = AAnd (split k A) (split k B)"
+| "split k (AForall A) = AForall (split k A)"
+| "split k (AExists A) = AExists (split k A)"
+
+| "split k (AForallState i A) = (if i = k then AAnd (AForallState k (split k A)) (AForallState (Suc k) (split k A))
+  else AForallState (if i > k then Suc i else i) (split k A))"
+| "split k (AExistsState i A) = (if i = k then AOr (AExistsState k (split k A)) (AExistsState (Suc k) (split k A))
+  else AExistsState (if i > k then Suc i else i) (split k A))"
+
+definition is_split where
+  "is_split k old_sets new_sets \<longleftrightarrow>
+  (old_sets k = new_sets k \<union> new_sets (Suc k)) \<and>
+  (\<forall>i. i < k \<longrightarrow> new_sets i = old_sets i) \<and>
+  (\<forall>i. i > Suc k \<longrightarrow> new_sets i = old_sets (i - 1))"
+
+lemma is_split_simpleE:
+  assumes "is_split k old_sets new_sets"
+  shows "old_sets k = new_sets k \<union> new_sets (Suc k)"
+  using assms unfolding is_split_def
+  by argo
+
+lemma is_split_smallerE:
+  assumes "is_split k old_sets new_sets"
+      and "i < k"
+  shows "new_sets i = old_sets i"
+  using assms unfolding is_split_def
+  by blast
+
+lemma is_split_largerE:
+  assumes "is_split k old_sets new_sets"
+      and "i > k"
+  shows "new_sets (Suc i) = old_sets i"
+  using assms unfolding is_split_def
+  by auto
+
+
+
+lemma split_soundness:
+  assumes "is_split k old_sets new_sets"
+    shows "sat_assertion vals states A old_sets \<longleftrightarrow> sat_assertion vals states (split k A) new_sets"
+  using assms
+proof (induct A arbitrary: vals states)
+  case (AForallState i A)
+  then show ?case
+    apply (cases "i = k")
+      unfolding sat_assertion.simps split.simps
+      using AForallState(1)[OF AForallState(2), of vals] is_split_simpleE[OF assms] apply fastforce
+    apply (cases "i < k")
+      unfolding sat_assertion.simps split.simps
+      using is_split_smallerE[OF assms] AForallState(1)[OF AForallState(2), of vals] apply simp
+    unfolding sat_assertion.simps split.simps
+      using assms is_split_largerE[OF assms] AForallState(1)[OF AForallState(2), of vals] by simp
+next
+  case (AExistsState i A)
+  then show ?case
+    apply (cases "i = k")
+      unfolding sat_assertion.simps split.simps
+      using AExistsState(1)[OF AExistsState(2), of vals] is_split_simpleE[OF assms] apply fastforce
+    apply (cases "i < k")
+      unfolding sat_assertion.simps split.simps
+      using is_split_smallerE[OF assms] AExistsState(1)[OF AExistsState(2), of vals] apply simp
+    unfolding sat_assertion.simps split.simps
+      using assms is_split_largerE[OF assms] AExistsState(1)[OF AExistsState(2), of vals] by simp
+qed (simp_all)
+
+
+
+
+
+
+
+
+section \<open>Semantic Relational HHL\<close>
+
+
+(*
+definition relational_hyper_hoare_triple
+ ("\<Turnstile> {_} [_] {_}" [51,0,0] 81) where
+  "\<Turnstile> {P} [l] {Q} \<longleftrightarrow> (\<forall>S. P S \<longrightarrow> Q (List.map (\<lambda>p. sem (fst p) (snd p)) (zip l S)))"
+*)
+
+(* Infinite S, and then S untouched on... ? *)
+
+(* l: *partial* function from nat to programs... *)
+
+(*
+Cs: partial function
+Ss: total function
+*) 
+
+
+
+
+
+(*
+fun programs_if :: "'a hyper_program \<Rightarrow> (nat, 'a) stmt \<Rightarrow> (nat, 'a) stmt \<Rightarrow> 'a hyper_program"
+  where
+  "programs_if Cs C1 C2 0 = Some C1"
+| "programs_if Cs C1 C2 (Suc 0) = Some C2"
+| "programs_if Cs C1 C2 (Suc (Suc n)) = Cs (Suc n)"
+*)
+
+lemma set_filter_lnot:
+  "S = Set.filter (b \<circ> snd) S \<union> Set.filter (lnot b \<circ> snd) S"
+  apply rule
+  unfolding lnot_def apply simp_all
+   apply (simp add: subsetI)
+  by (simp add: Set.filter_def)
+
+
+
+
+lemma split_charact:
+  assumes "is_split 0 old_sets new_sets" (* old_sets 0 = new_sets 0 \<union> new_sets 1 *)
+      and "sat_assertion vals states (split 0 Q) new_sets"
+    shows "sat_assertion vals states Q old_sets"
+  using assms
+proof (induct arbitrary: vals states rule: split.induct)
+  case (7 A)
+  then show ?case
+    by (meson split_soundness)
+next
+  case (8 A)
+  then show ?case
+    by (meson split_soundness)
+qed (auto)
+
+
+fun split_first_set where
+  "split_first_set b S 0 = Set.filter (b \<circ> snd) (S 0)"
+| "split_first_set b S (Suc 0) = Set.filter (lnot b \<circ> snd) (S 0)"
+| "split_first_set b S (Suc (Suc n)) = S (Suc n)"
+  
+lemma charact_split_first_set:
+  shows "is_split 0 (sem_rel [0 \<mapsto> if_then_else b C1 C2] S) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
+  unfolding is_split_def sem_rel_def apply simp
+  apply (rule conjI)
+   apply (simp add:  assume_sem if_then_else_def sem_if sem_seq)
+  by (metis Suc_lessD diff_Suc_Suc gr0_conv_Suc minus_nat.diff_0 split_first_set.simps(3) zero_less_diff)
+
+
+lemma needed_for_soundness:
+  assumes "interp_assert (split 0 Q) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] (split_first_set b S))"
+    shows "interp_assert Q (sem_rel [0 \<mapsto> if_then_else b C1 C2] S)"
+  using assms(1)
+  apply(auto)
+  apply (rule split_charact[rotated])
+  using charact_split_first_set apply(simp)
+  using charact_split_first_set
+  by (metis One_nat_def)
+
+fun split_at_zero where
+  "split_at_zero (AConst b) = AConst b"
+| "split_at_zero (AComp e1 cmp e2) = AComp e1 cmp e2"
+| "split_at_zero (AForallState 0 A) = AAnd (AForallState 0 (split_at_zero A)) (AForallState 1 (split_at_zero A))"
+| "split_at_zero (AForallState (Suc n) A) = AForallState (Suc (Suc n)) (split_at_zero A)"
+| "split_at_zero (AExistsState 0 A) = AOr (AExistsState 0 (split_at_zero A)) (AExistsState 1 (split_at_zero A))"
+| "split_at_zero (AExistsState (Suc n) A) = AExistsState (Suc (Suc n)) (split_at_zero A)"
+| "split_at_zero (AForall A) = AForall (split_at_zero A)"
+| "split_at_zero (AExists A) = AExists (split_at_zero A)"
+| "split_at_zero (AOr A B) = AOr (split_at_zero A) (split_at_zero B)"
+| "split_at_zero (AAnd A B) = AAnd (split_at_zero A) (split_at_zero B)"
+
+lemma split_zero_lemma: "split_at_zero P = split 0 P"
+proof (induction P)
+  case (AForallState x P)
+  then show ?case 
+  proof (cases x)
+    case 0
+    with AForallState show ?thesis by auto
+  next
+    case (Suc nat)
+    with AForallState show ?thesis by auto
+  qed
+next
+  case (AExistsState x P)
+  then show ?case 
+  proof (cases x)
+    case 0
+    with AExistsState show ?thesis by auto
+  next
+    case (Suc nat)
+    with AExistsState show ?thesis by auto
+  qed
+qed (auto)
+
+theorem if_relational_decomposition:
+  assumes "\<Turnstile> { conj (interp_assert (split_at_zero P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) } 
+              [[0 \<mapsto> C1, 1 \<mapsto> C2]] 
+              {interp_assert (split_at_zero Q)}"
+  shows "\<Turnstile> { interp_assert P } [[0 \<mapsto> if_then_else b C1 C2]] {interp_assert Q}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume asm0: "interp_assert P S"
+
+  let ?S = "split_first_set b S"
+
+  have "conj (interp_assert (split 0 P)) (conj (\<lambda>S. holds_forall b (S 0)) (\<lambda>S. holds_forall (lnot b) (S 1))) ?S"
+    unfolding  conj_def apply simp_all
+    apply (rule conjI)
+     defer
+     apply (simp add: holds_forall_def lnot_def)
+  proof -
+    have "is_split 0 S ?S"
+      unfolding is_split_def apply simp_all
+      apply (rule conjI)
+       apply (simp add: set_filter_lnot)
+       apply (rule allI)
+       apply (case_tac "i = 0")
+        apply simp
+       apply (case_tac "i = Suc 0")
+       apply simp_all
+      by (metis One_nat_def bot_nat_0.not_eq_extremum diff_Suc_1 split_first_set.elims)
+    then show "interp_assert (split 0 P) ?S" using split_soundness[of 0 S ?S "[]" "[]" P]
+      using asm0 by blast
+  qed
+  then have "interp_assert (split 0 Q) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] ?S)"
+    using assms(1) unfolding relational_hyper_hoare_triple_def
+    by(simp only: split_zero_lemma)
+  then show "interp_assert Q (sem_rel [0 \<mapsto> if_then_else b C1 C2] S)"
+    using needed_for_soundness by blast
+qed
+
+
+
+section \<open>Reindexing\<close>
+
+
+type_synonym reindexing = "nat \<Rightarrow> nat"
+
+fun reindex_syn_assertion where
+  "reindex_syn_assertion \<pi> (AConst b) = AConst b"
+| "reindex_syn_assertion \<pi> (AComp e1 cmp e2) = AComp e1 cmp e2"
+| "reindex_syn_assertion \<pi> (AForallState n A) = AForallState (\<pi> n) (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AExistsState n A) = AExistsState (\<pi> n) (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AForall A) = AForall (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AExists A) = AExists (reindex_syn_assertion \<pi> A)"
+| "reindex_syn_assertion \<pi> (AOr A B) = AOr (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
+| "reindex_syn_assertion \<pi> (AAnd A B) = AAnd (reindex_syn_assertion \<pi> A) (reindex_syn_assertion \<pi> B)"
+
+definition reindex_hyper_stuff where
+  "reindex_hyper_stuff \<pi> S n = S (\<pi> n)"
+
+lemma reindex_equiv:
+  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<longleftrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
+  unfolding reindex_hyper_stuff_def
+  by (induct A arbitrary: vals states) auto
+
+lemma reindex_both_impl:
+  "sat_assertion vals states (reindex_syn_assertion \<pi> A) S \<Longrightarrow> sat_assertion vals states A (reindex_hyper_stuff \<pi> S)"
+  "sat_assertion vals states A (reindex_hyper_stuff \<pi> S) \<Longrightarrow> sat_assertion vals states (reindex_syn_assertion \<pi> A) S"
+  using reindex_equiv by blast+
+
+lemma sem_lifted_reindex:
+  "reindex_hyper_stuff \<pi> (sem_rel Cs S) = sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S)"
+  apply (rule ext)
+  by (simp add: reindex_hyper_stuff_def sem_rel_def)
+
+
+theorem reindex_rule_one_direction:
+  assumes "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q}"
+  shows "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "interp_assert (reindex_syn_assertion \<pi> P) S"
+  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
+    by (simp add: reindex_both_impl(1))
+  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
+    by (meson assms relational_hyper_hoare_triple_def)
+  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
+    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
+qed
+
+lemma reindex_bij:
+  assumes "bij \<pi>"
+  shows "P = reindex_syn_assertion \<pi> (reindex_syn_assertion (inv \<pi>) P)"
+  using assms
+  apply (induct P) apply simp_all
+  by (metis bij_inv_eq_iff)+
+
+
+theorem reindex_rule_one_direction_bij:
+  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ reindex_hyper_stuff (inv \<pi>) Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+      and "bij \<pi>"
+  shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q }"
+proof -
+  have "interp_assert P = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) P))"
+    by (metis assms(2) bij_betw_inv_into reindex_bij)
+  moreover have "interp_assert Q = interp_assert (reindex_syn_assertion (inv \<pi>) (reindex_syn_assertion (inv (inv \<pi>)) Q))"
+    by (metis assms(2) bij_betw_inv_into reindex_bij)
+  ultimately show ?thesis
+    by (simp add: assms(1) assms(2) inv_inv_eq reindex_rule_one_direction)
+qed
+
+
+
+
+(*
+theorem reindex_rule_other_direction:
+  assumes "\<Turnstile> { interp_assert (reindex_syn_assertion \<pi> P) } [ Cs ] {interp_assert (reindex_syn_assertion \<pi> Q)}"
+  shows "\<Turnstile> { interp_assert P } [ reindex_hyper_stuff \<pi> Cs ] {interp_assert Q }"
+(* I think this one needs bijection *)
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "interp_assert P S"
+
+
+"interp_assert (reindex_syn_assertion \<pi> P) S"
+  then have "interp_assert P (reindex_hyper_stuff \<pi> S)"
+    by (simp add: reindex_both_impl(1))
+  then have "interp_assert Q (sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S))"
+    by (meson assms relational_hyper_hoare_triple_def)
+  then show "interp_assert (reindex_syn_assertion \<pi> Q) (sem_rel Cs S)"
+    by (simp add: reindex_both_impl(2) sem_lifted_reindex)
+qed
+*)
+
+
+
+(* Use case: Generalized if rule *)
+
+(*
+theorem rule_if_relational_generalized:
+  assumes "\<Turnstile> { split_with_b b k P } [ programs_if Cs C1 C2 ] {interp_assert (post_if_rel Q)}" (* Not Q here... *)
+      and "Cs k = Some (if_then_else b C1 C2)"
+    shows "\<Turnstile> { interp_assert P } [ Cs ] {interp_assert Q}"
+proof (rule reindex_rule_one_direction_bij)
+
+  thm rule_if_relational[of b ]
+*)
+
+
+
+
+
+section \<open>Progress only one\<close>
+
+corollary progress_any:
+  assumes "Cs i = Some (C1;; C2)"
+      and "\<Turnstile> {P} [ [i \<mapsto> C1] ] {R}"
+      and "\<Turnstile> {R} [ Cs(i \<mapsto> C2) ] {Q}"
+    shows "\<Turnstile> {P} [ Cs ] {Q}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S assume "P S"
+  moreover have "Cs = hyper_seq [i \<mapsto> C1] (Cs(i \<mapsto> C2))"
+    unfolding hyper_seq_def
+    apply (rule ext)
+    apply (case_tac "n = i")
+    by (simp_all add: assms)
+  ultimately show "Q (sem_rel Cs S)"
+    using seq_extension[of P "[i \<mapsto> C1]" R "Cs(i \<mapsto> C2)" Q]
+    by (metis assms(2) assms(3) relational_hyper_hoare_triple_def)
+qed
+
+
+section \<open>Thibault's Loop rules\<close>
 
 
 fun no_exists_stateI :: "nat set \<Rightarrow> 'a syn_assertion \<Rightarrow> bool"
@@ -1653,7 +1605,7 @@ definition holds_forall_relational where
 
 fun iterate_sem_lifted where
   "iterate_sem_lifted 0 _ S = S"
-| "iterate_sem_lifted (Suc n) Cs S = sem_lifted Cs (iterate_sem_lifted n Cs S)"
+| "iterate_sem_lifted (Suc n) Cs S = sem_rel Cs (iterate_sem_lifted n Cs S)"
 
 lemma relational_indexed_invariant_then_power:
   assumes "\<And>n. relational_hyper_hoare_triple (I n) Cs (I (Suc n))"
@@ -1665,7 +1617,7 @@ next
   case (Suc n)
   then have "I n (iterate_sem_lifted n Cs S)"
     by blast
-  then have "I (Suc n) (sem_lifted Cs (iterate_sem_lifted n Cs S))"
+  then have "I (Suc n) (sem_rel Cs (iterate_sem_lifted n Cs S))"
     using Suc.prems(1) relational_hyper_hoare_tripleE by blast
   then show ?case
     by (simp add: Suc.hyps Suc.prems(1))
@@ -1690,8 +1642,8 @@ lemma relational_iterate_sem_assume_increasing:
   apply (rule hyper_set_leI)
   using assms unfolding hyper_set_le_def filter_exp_indices_def construct_programs_def map_indices_def
    apply simp_all
-   apply (smt (verit) UnCI filter_exp_def if_then_sem member_filter option.sel partial_sem.elims sem_lifted_def subsetI)
-  by (simp add: sem_lifted_def)
+   apply (smt (verit) UnCI filter_exp_def if_then_sem member_filter option.sel partial_sem.elims sem_rel_def subsetI)
+  by (simp add: sem_rel_def)
 
 
 lemma relational_filter_exp_union:
@@ -1724,33 +1676,8 @@ lemma ascending_iterate_filter:
 
 
 
-section \<open>Consequence Rules\<close>
 
 
-theorem cons:
-  assumes "entails P P'"
-      and "entails Q' Q"
-      and "\<Turnstile> {P'} [C] {Q'}"
-    shows "\<Turnstile> {P} [C] {Q}"
-  by (metis assms(1,2,3) entails_def relational_hyper_hoare_triple_def)
-
-corollary cons_prec:
-  assumes "entails P P'"
-      and "\<Turnstile> {P'} [C] {Q}"
-    shows "\<Turnstile> {P} [C] {Q}"
-  apply(rule cons)
-  using assms apply simp
-   apply(rule entails_refl)
-  using assms by simp
-
-corollary cons_post:
-  assumes "entails Q' Q"
-      and "\<Turnstile> {P} [C] {Q'}"
-    shows "\<Turnstile> {P} [C] {Q}"
-  apply(rule cons)
-   apply(rule entails_refl)
-  using assms apply simp
-  using assms by simp
 
 
 
@@ -1758,7 +1685,7 @@ section \<open>Rewrite Rule\<close>
 
 
 definition sem_equiv_hyper_cond where
-"sem_equiv_hyper_cond Cs1 Cs2 P \<longleftrightarrow> (\<forall>S. P S \<longrightarrow> (sem_lifted Cs1 S) = (sem_lifted Cs2 S))"
+"sem_equiv_hyper_cond Cs1 Cs2 P \<longleftrightarrow> (\<forall>S. P S \<longrightarrow> (sem_rel Cs1 S) = (sem_rel Cs2 S))"
 
 lemma sem_equiv_hyper_cond_refl:
   "sem_equiv_hyper_cond Cs1 Cs2 P = sem_equiv_hyper_cond Cs2 Cs1 P"
@@ -1769,11 +1696,11 @@ theorem rewrite_rule_cond:
       and "\<Turnstile> {P} [Cs1] {Q}" 
     shows "\<Turnstile> {P} [Cs2] {Q}"
   using assms
-  by(auto simp add:relational_hyper_hoare_triple_def sem_lifted_def sem_equiv_hyper_cond_def)
+  by(auto simp add:relational_hyper_hoare_triple_def sem_rel_def sem_equiv_hyper_cond_def)
 
 
 definition sem_equiv_hyper where
-"sem_equiv_hyper Cs1 Cs2 = (\<forall>S. (sem_lifted Cs1 S) = (sem_lifted Cs2 S))"
+"sem_equiv_hyper Cs1 Cs2 = (\<forall>S. (sem_rel Cs1 S) = (sem_rel Cs2 S))"
 
 lemma sem_equiv_hyper_refl:
   "sem_equiv_hyper Cs1 Cs2 = sem_equiv_hyper Cs2 Cs1"
@@ -1784,40 +1711,16 @@ theorem rewrite_rule:
         and "\<Turnstile> {P} [Cs1] {Q}"
       shows "\<Turnstile> {P} [Cs2] {Q}"
   using assms
-  by(auto simp add:relational_hyper_hoare_triple_def sem_lifted_def sem_equiv_hyper_def)
+  by(auto simp add:relational_hyper_hoare_triple_def sem_rel_def sem_equiv_hyper_def)
 
 section \<open>If Lockstep\<close>
 
-definition map_comprehension :: "('i \<Rightarrow> 'a) \<Rightarrow> ('i \<Rightarrow> bool) \<Rightarrow> ('i \<rightharpoonup> 'a)" where
-  "map_comprehension f P \<equiv> (\<lambda>i. if P i then Some (f i) else None)"
-
-translations
-  "[i \<mapsto> t | P]" => "CONST map_comprehension (\<lambda>i. t) (\<lambda>i. P)"
 
 
-lemma sem_lifted_rewrite: "sem_lifted [ i \<mapsto> (C i) | i \<in> I ] S = (\<lambda>i. if (i \<in> I) then (sem (C i) (S i)) else (S i))"
-  by (metis (mono_tags, lifting) map_comprehension_def partial_sem.simps(1,2) sem_lifted_def) 
 
-definition holds_forall_hyper where
-  "holds_forall_hyper I bs S \<longleftrightarrow> (\<forall>i\<in>I. \<forall>\<phi>\<in>(S i). (bs i) (snd \<phi>))"
+lemma sem_lifted_rewrite: "sem_rel [ i \<mapsto> (C i) | i \<in> I ] S = (\<lambda>i. if (i \<in> I) then (sem (C i) (S i)) else (S i))"
+  by (metis (mono_tags, lifting) map_comprehension_def partial_sem.simps(1,2) sem_rel_def) 
 
-definition low_exp_hyper where
-  "low_exp_hyper I es S = (\<forall>i\<in>I. \<forall>i'\<in>I. \<forall>\<phi> \<phi>'. (\<phi> \<in> (S i) \<and> \<phi>' \<in> (S i')) \<longrightarrow> ((es i) (snd \<phi>) = (es i') (snd \<phi>')))"
-
-
-definition lnot_hyper where
-  "lnot_hyper bs i \<sigma> = (\<not>(bs i) \<sigma>)"
-
-lemma low_exp_either: "(low_exp_hyper I bs) S \<Longrightarrow> (holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S)"
-  by (smt (verit) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
-
-lemma either_low_exp: "(holds_forall_hyper I bs S) \<or> (holds_forall_hyper I (lnot_hyper bs) S) \<Longrightarrow> low_exp_hyper I bs S"
-  by (smt (verit, del_insts) holds_forall_hyper_def lnot_hyper_def low_exp_hyper_def)
-
-corollary low_exp_equiv: "(low_exp_hyper I bs) = disj (holds_forall_hyper I bs) (holds_forall_hyper I (lnot_hyper bs))"
-  unfolding disj_def
-  apply(rule)
-  using low_exp_either either_low_exp by blast
 
 theorem if_lockstep_true:
   assumes "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
@@ -1893,12 +1796,12 @@ proof -
   proof (intro ballI allI impI)
     fix S
     assume asm1:"\<forall>S. Logic.conj P (holds_forall_hyper I bs) S \<longrightarrow>
-              Q (sem_lifted (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
+              Q (sem_rel (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
           asm2:"\<forall>S. Logic.conj P (holds_forall_hyper I (lnot_hyper bs)) S \<longrightarrow>
-              Q (sem_lifted (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
+              Q (sem_rel (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
           asm3:"Logic.conj P (low_exp_hyper I bs) S"
     hence "conj P (holds_forall_hyper I bs) S \<or> conj P (holds_forall_hyper I (lnot_hyper bs)) S" using low_exp_either conj_def by metis
-    thus "Q (sem_lifted (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)"
+    thus "Q (sem_rel (map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)"
     proof
       assume "Logic.conj P (holds_forall_hyper I bs) S"
       with asm1 show ?thesis by auto
@@ -1976,8 +1879,8 @@ lemma least_or_none: "(\<exists>(n::nat). (P n) \<and> (\<forall>m<n. \<not>(P m
 
 
 lemma hyper_seq_sem:
-  "sem_lifted [ i \<mapsto> (Cs2 i) | i \<in> I ] (sem_lifted [ i \<mapsto> (Cs1 i) | i \<in> I ] S) = sem_lifted [ i \<mapsto> Seq (Cs1 i) (Cs2 i) | i \<in> I ] S"
-  unfolding sem_lifted_def map_comprehension_def
+  "sem_rel [ i \<mapsto> (Cs2 i) | i \<in> I ] (sem_rel [ i \<mapsto> (Cs1 i) | i \<in> I ] S) = sem_rel [ i \<mapsto> Seq (Cs1 i) (Cs2 i) | i \<in> I ] S"
+  unfolding sem_rel_def map_comprehension_def
   apply (rule ext)
      apply simp_all
   using sem_seq by blast
@@ -1985,7 +1888,7 @@ lemma hyper_seq_sem:
 
 fun sem_lifted_after_n where
 "sem_lifted_after_n 0 C S = S" |
-"sem_lifted_after_n (Suc n) C S = sem_lifted C (sem_lifted_after_n n C S)"
+"sem_lifted_after_n (Suc n) C S = sem_rel C (sem_lifted_after_n n C S)"
 
 definition pointwise_Union  where
   "pointwise_Union Sn f i = (\<Union>n\<in>Sn. (f n i))"
@@ -2010,8 +1913,8 @@ proof -
     assume "x \<in> (\<Union>n. sem_lifted_after_n (Suc n) (map_comprehension Cs (\<lambda>i. i \<in> I)) S i)"
     thus "x \<in> (\<Union>n. sem_lifted_after_n n (map_comprehension Cs (\<lambda>i. i \<in> I)) S i)" apply(simp)
     proof -
-      assume "\<exists>xa. x \<in> sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_lifted_after_n xa (map_comprehension Cs (\<lambda>i. i \<in> I)) S) i"
-      from this obtain n where "x \<in> sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_lifted_after_n n (map_comprehension Cs (\<lambda>i. i \<in> I)) S) i" by blast
+      assume "\<exists>xa. x \<in> sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_lifted_after_n xa (map_comprehension Cs (\<lambda>i. i \<in> I)) S) i"
+      from this obtain n where "x \<in> sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_lifted_after_n n (map_comprehension Cs (\<lambda>i. i \<in> I)) S) i" by blast
       hence fact: "x \<in> sem_lifted_after_n (Suc n) (map_comprehension Cs (\<lambda>i. i \<in> I)) S i" using sem_lifted_after_n_combined by auto
       show "\<exists>xa. x \<in> sem_lifted_after_n xa (map_comprehension Cs (\<lambda>i. i \<in> I)) S i"
       proof
@@ -2037,7 +1940,7 @@ proof -
 qed
 
 
-lemma while_union: "(sem_lifted [ i \<mapsto> While (Cs i)| i \<in> I ] S) 
+lemma while_union: "(sem_rel [ i \<mapsto> While (Cs i)| i \<in> I ] S) 
       = (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Cs i | i \<in> I] S)))"
 proof - 
   have fact: "(\<lambda>i. if (i \<in> I) then (sem (While (Cs i)) (S i)) else (S i)) = (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Cs i | i \<in> I] S)))"
@@ -2120,10 +2023,10 @@ proof -
                   then show ?case by auto
                 next
                   case (Suc n)
-                  hence "x \<in> sem_lifted (\<lambda>i. if i \<in> I then Some (Cs i) else None) (sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S) i" by auto
+                  hence "x \<in> sem_rel (\<lambda>i. if i \<in> I then Some (Cs i) else None) (sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S) i" by auto
                   from this \<open>i \<in> I\<close>
                   have "x \<in> {x. \<exists>\<sigma>' \<sigma> l. x = (l, \<sigma>') \<and> (l, \<sigma>) \<in> sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S i \<and> \<langle>Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'}"
-                    using sem_lifted_def sem_def by (smt (verit, ccfv_threshold) map_comprehension_def mem_Collect_eq sem_lifted_rewrite) 
+                    using sem_rel_def sem_def by (smt (verit, ccfv_threshold) map_comprehension_def mem_Collect_eq sem_lifted_rewrite) 
                   hence "\<exists>\<sigma>' \<sigma> l. x = (l, \<sigma>') \<and> (l, \<sigma>) \<in> sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S i \<and> \<langle>Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by auto
                   from this obtain \<sigma>' \<sigma> l where fact_x:"x = (l, \<sigma>')" and fact_n: "(l, \<sigma>) \<in> sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S i " and fact_step:"\<langle>Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by blast
                   from fact_n Suc have "\<exists>\<phi>' \<phi> l'. (l, \<sigma>) = (l', \<phi>') \<and> (l', \<phi>) \<in> S i \<and> \<langle>While (Cs i), \<phi>\<rangle> \<rightarrow> \<phi>'" by auto
@@ -2150,8 +2053,8 @@ proof -
                 then show ?case using \<open>i\<notin>I\<close> by auto
               next
                 case (Suc n)
-                hence "x \<in> sem_lifted (\<lambda>i. if i \<in> I then Some (Cs i) else None) (sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S) i" by auto
-                from this Suc show ?case using \<open>i\<notin>I\<close> by (auto simp add:sem_lifted_def)
+                hence "x \<in> sem_rel (\<lambda>i. if i \<in> I then Some (Cs i) else None) (sem_lifted_after_n n (\<lambda>i. if i \<in> I then Some (Cs i) else None) S) i" by auto
+                from this Suc show ?case using \<open>i\<notin>I\<close> by (auto simp add:sem_rel_def)
               qed
             qed
           qed
@@ -2202,14 +2105,14 @@ theorem while_lockstep:
     shows   "\<Turnstile> { conj Iv (low_exp_hyper I bs)} [[ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ]] { conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))}"
 proof -
   from assms[unfolded relational_hyper_hoare_triple_def] have "\<forall>S. conj Iv (holds_forall_hyper I bs) S \<longrightarrow>
-      conj Iv (low_exp_hyper I bs) (sem_lifted [i \<mapsto> (Cs i) | i \<in> I] S) " by auto
+      conj Iv (low_exp_hyper I bs) (sem_rel [i \<mapsto> (Cs i) | i \<in> I] S) " by auto
   
   moreover have "\<forall>S. conj Iv (holds_forall_hyper I bs) S \<longrightarrow>
-      conj Iv (holds_forall_hyper I bs) (sem_lifted [i \<mapsto> Assume (bs i) | i \<in> I] S)" 
+      conj Iv (holds_forall_hyper I bs) (sem_rel [i \<mapsto> Assume (bs i) | i \<in> I] S)" 
   proof
     fix S
     show "conj Iv (holds_forall_hyper I bs) S \<longrightarrow>
-      conj Iv (holds_forall_hyper I bs) (sem_lifted [i \<mapsto> Assume (bs i) | i \<in> I] S)"
+      conj Iv (holds_forall_hyper I bs) (sem_rel [i \<mapsto> Assume (bs i) | i \<in> I] S)"
     proof
       assume asm0:"conj Iv (holds_forall_hyper I bs) S"
       have "(\<lambda>i. if (i \<in> I) then (sem (Assume (bs i)) (S i)) else (S i)) = S" 
@@ -2256,22 +2159,22 @@ proof -
         qed
       qed
       with asm0 have H:"conj Iv (holds_forall_hyper I bs) (\<lambda>i. if (i \<in> I) then (sem (Assume (bs i)) (S i)) else (S i))" by auto
-      thus "conj Iv (holds_forall_hyper I bs) (sem_lifted [i \<mapsto> Assume (bs i) | i \<in> I] S)" by (simp add: H sem_lifted_rewrite)
+      thus "conj Iv (holds_forall_hyper I bs) (sem_rel [i \<mapsto> Assume (bs i) | i \<in> I] S)" by (simp add: H sem_lifted_rewrite)
     qed
   qed
 
   ultimately have "\<forall>S. conj Iv (holds_forall_hyper I bs) S \<longrightarrow>
-        conj Iv (low_exp_hyper I bs) (sem_lifted [i \<mapsto> (Cs i) | i \<in> I] (sem_lifted [i \<mapsto> Assume (bs i) | i \<in> I] S))"  by blast
+        conj Iv (low_exp_hyper I bs) (sem_rel [i \<mapsto> (Cs i) | i \<in> I] (sem_rel [i \<mapsto> Assume (bs i) | i \<in> I] S))"  by blast
 
   hence step_holds: "\<forall>S. conj Iv (holds_forall_hyper I bs) S \<longrightarrow>
-      conj Iv (low_exp_hyper I bs) (sem_lifted [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)" using hyper_seq_sem
+      conj Iv (low_exp_hyper I bs) (sem_rel [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)" using hyper_seq_sem
   proof -
     show ?thesis
-      by (metis (no_types) \<open>\<forall>S. Logic.conj Iv (holds_forall_hyper I bs) S \<longrightarrow> Logic.conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i)) (\<lambda>i. i \<in> I)) S))\<close> hyper_seq_sem)
+      by (metis (no_types) \<open>\<forall>S. Logic.conj Iv (holds_forall_hyper I bs) S \<longrightarrow> Logic.conj Iv (low_exp_hyper I bs) (sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i)) (\<lambda>i. i \<in> I)) S))\<close> hyper_seq_sem)
   qed
 
 
-  have while_is_union: "\<forall>S. (sem_lifted [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S) 
+  have while_is_union: "\<forall>S. (sem_rel [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S) 
       = (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))"
     using while_union by auto
 
@@ -2309,7 +2212,7 @@ proof -
      (sem_lifted_after_n (Suc n) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)"
             proof 
               assume "holds_forall_hyper I bs (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)"
-              with iv_holds conj_def step_holds have "conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))"
+              with iv_holds conj_def step_holds have "conj Iv (low_exp_hyper I bs) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))"
                 by (metis (mono_tags, lifting))
               thus "conj (Logic.disj Iv (hyper_emp I)) (low_exp_hyper I bs)
                   (sem_lifted_after_n (Suc n) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)"
@@ -2359,7 +2262,7 @@ proof -
                 qed
               qed
               hence H: "conj (hyper_emp I) (low_exp_hyper I bs) (\<lambda>i. if (i \<in> I) then (sem (Assume (bs i) ;; Cs i) (?S' i)) else (?S' i))" using hyper_empty_low_exp by force
-              hence "conj (hyper_emp I) (low_exp_hyper I bs) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) ?S')"
+              hence "conj (hyper_emp I) (low_exp_hyper I bs) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) ?S')"
                 by (simp add: H sem_lifted_rewrite)
               thus "Logic.conj (Logic.disj Iv (hyper_emp I)) (low_exp_hyper I bs)
                     (sem_lifted_after_n (Suc n) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)"
@@ -2410,7 +2313,7 @@ proof -
               qed
             qed
             hence H: "conj (hyper_emp I) (low_exp_hyper I bs) (\<lambda>i. if (i \<in> I) then (sem (Assume (bs i) ;; Cs i) (?S' i)) else (?S' i))" using hyper_empty_low_exp by force
-            hence "conj (hyper_emp I) (low_exp_hyper I bs) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) ?S')"
+            hence "conj (hyper_emp I) (low_exp_hyper I bs) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) ?S')"
               by (simp add: H sem_lifted_rewrite)
             thus "Logic.conj (Logic.disj Iv (hyper_emp I)) (low_exp_hyper I bs)
                   (sem_lifted_after_n (Suc n) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)"
@@ -2553,18 +2456,18 @@ proof -
                   proof
                     fix i
                     have "i\<in>I \<or> i\<notin>I" by auto
-                    thus " sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
+                    thus " sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
           (\<lambda>i. if i \<in> I then {} else sem_lifted_after_n (Suc m'') (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i) i =
          (if i \<in> I then {} else sem_lifted_after_n (Suc (Suc m'')) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i)"
                     proof
                       assume "i \<in> I"
-                      thus " sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
+                      thus " sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
           (\<lambda>i. if i \<in> I then {} else sem_lifted_after_n (Suc m'') (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i) i =
          (if i \<in> I then {} else sem_lifted_after_n (Suc (Suc m'')) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i)"
                         by (auto simp add:sem_lifted_rewrite sem_def)
                       next 
                         assume "i\<notin>I"
-                        thus "sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
+                        thus "sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))
           (\<lambda>i. if i \<in> I then {} else sem_lifted_after_n (Suc m'') (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i) i =
          (if i \<in> I then {} else sem_lifted_after_n (Suc (Suc m'')) (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i)"
                           by (auto simp add:sem_lifted_rewrite sem_def)
@@ -2674,37 +2577,37 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
   have fact3: "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow> 
         (\<forall>n. (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S) 
         \<and> (\<forall>m<n. (holds_forall_hyper I bs) (sem_lifted_after_n m [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))
-    \<longrightarrow> sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
+    \<longrightarrow> sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
         = (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))" 
   proof
     fix S
     show "conj Iv (low_exp_hyper I bs) S \<longrightarrow> 
         (\<forall>n. (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S) 
         \<and> (\<forall>m<n. (holds_forall_hyper I bs) (sem_lifted_after_n m [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))
-    \<longrightarrow> sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
+    \<longrightarrow> sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
         = (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))"
     proof
       assume "conj Iv (low_exp_hyper I bs) S"
       show " (\<forall>n. (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S) 
         \<and> (\<forall>m<n. (holds_forall_hyper I bs) (sem_lifted_after_n m [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))
-    \<longrightarrow> sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
+    \<longrightarrow> sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (pointwise_Union {i::nat | i. i \<le> n} (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)))
         = (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))"
       proof
         fix n
         show "holds_forall_hyper I (lnot_hyper bs) (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S) \<and>
          (\<forall>m<n. holds_forall_hyper I bs (sem_lifted_after_n m (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) \<longrightarrow>
-         sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
+         sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
           (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) =
          sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S"
         proof
           assume asm: "holds_forall_hyper I (lnot_hyper bs) (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S) \<and>
     (\<forall>m<n. holds_forall_hyper I bs (sem_lifted_after_n m (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))"
-          show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
+          show "sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
                 (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) =
                 sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S"
           proof
             fix i
-            from asm show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
+            from asm show "sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
           (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) i =
          sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S i"
               apply(auto simp add:sem_lifted_rewrite sem_def pointwise_Union_def lnot_def holds_forall_hyper_def lnot_hyper_def snd_def)
@@ -2752,7 +2655,7 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
               next
                 case (Suc m)
                 hence "Logic.conj Iv (holds_forall_hyper I bs) (sem_lifted_after_n m (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)" by auto
-                with step_holds have "Logic.conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) (sem_lifted_after_n m (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))" by auto
+                with step_holds have "Logic.conj Iv (low_exp_hyper I bs) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) (sem_lifted_after_n m (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))" by auto
                 with asm2 \<open>Suc m < n\<close> show ?case by(auto simp add:conj_def)
               qed
             qed
@@ -2766,7 +2669,7 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
             case (Suc n')
             hence "n' < n" by auto
             with factm have "Logic.conj Iv (holds_forall_hyper I bs) (sem_lifted_after_n n' (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)" by auto
-            with step_holds have "Logic.conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))  (sem_lifted_after_n n' (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))" by auto
+            with step_holds have "Logic.conj Iv (low_exp_hyper I bs) (sem_rel (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I))  (sem_lifted_after_n n' (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S))" by auto
             with asm2 \<open>n = Suc n'\<close> show ?thesis by(auto simp add:conj_def)
           qed
         qed
@@ -2779,7 +2682,7 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
         (\<exists>n. (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S) 
         \<and> (\<forall>m<n. (holds_forall_hyper I bs) (sem_lifted_after_n m [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))) \<longrightarrow>
         conj Iv (holds_forall_hyper I (lnot_hyper bs))
-       (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_lifted [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))" 
+       (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_rel [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))" 
     by (metis (mono_tags, lifting) while_is_union fact2 fact3 fact4)
 
 
@@ -2805,13 +2708,13 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
 
   have fact_prep9: "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow>
         (\<forall>n. (holds_forall_hyper I bs) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)) \<longrightarrow> 
-         (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))
+         (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))
           = (\<lambda>i. (if i\<in>I then {} else S i))" 
   proof
     fix S
     show "Logic.conj Iv (low_exp_hyper I bs) S \<longrightarrow>
          (\<forall>n. holds_forall_hyper I bs (sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) \<longrightarrow>
-         sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
+         sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
           (pointwise_Union UNIV (\<lambda>n. sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) =
          (\<lambda>i. if i \<in> I then {} else S i)" (is "?P \<longrightarrow> (?R \<longrightarrow>?Q)")
     proof
@@ -2822,7 +2725,7 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
         show "?Q"
         proof
           fix i
-          from asm2 show " sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
+          from asm2 show " sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I))
           (pointwise_Union UNIV (\<lambda>n. sem_lifted_after_n n (map_comprehension (\<lambda>i. Assume (bs i) ;; Cs i) (\<lambda>i. i \<in> I)) S)) i =
          (if i \<in> I then {} else S i)"
             apply(auto simp add:sem_lifted_rewrite sem_def pointwise_Union_def lnot_def holds_forall_hyper_def snd_def)
@@ -2836,12 +2739,12 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
   have fact9: "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow>
         (\<forall>n. (holds_forall_hyper I bs) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)) \<longrightarrow> 
         conj (hyper_emp I) (holds_forall_hyper I (lnot_hyper bs))
-         (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))"  
+         (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))"  
   proof
     fix S
     show "conj Iv (low_exp_hyper I bs) S \<longrightarrow> (\<forall>n. (holds_forall_hyper I bs) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)) \<longrightarrow> 
         conj (hyper_emp I) (holds_forall_hyper I (lnot_hyper bs))
-         (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))" (is "?P \<longrightarrow> (?R \<longrightarrow>?Q)")
+         (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ]  (pointwise_Union (UNIV :: nat set) (\<lambda>n. (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S))))" (is "?P \<longrightarrow> (?R \<longrightarrow>?Q)")
     proof
       assume asm1: "?P"
       show "(?R \<longrightarrow>?Q)"
@@ -2857,17 +2760,17 @@ pointwise_union (pointwise_Union {i |i. i \<le> n} (\<lambda>n. sem_lifted_after
   have if_exists_not_then_EMP_and_holds_notbs: "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow>
           (\<forall>n. (holds_forall_hyper I bs) (sem_lifted_after_n n [i \<mapsto> Assume (bs i);;(Cs i) | i \<in> I] S)) \<longrightarrow> 
           conj (hyper_emp I) (holds_forall_hyper I (lnot_hyper bs))
-           (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_lifted [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))"  
+           (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_rel [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))"  
     by (simp add: fact9 while_is_union)
 
   have "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow>
       conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))
-       (sem_lifted [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_lifted [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))" 
+       (sem_rel [ i \<mapsto> Assume (lnot (bs i)) | i \<in> I ] (sem_rel [ i \<mapsto> While (Assume (bs i);; Cs i)| i \<in> I ] S))" 
     by (metis (mono_tags, lifting) conj_def disj_def exists_leastn_or_not if_n_then_IV_and_holds_notbs if_exists_not_then_EMP_and_holds_notbs)
 
   hence "\<forall>S. conj Iv (low_exp_hyper I bs) S \<longrightarrow>
       conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))
-       (sem_lifted [ i \<mapsto> While (Assume (bs i);; Cs i);; Assume (lnot (bs i)) | i \<in> I ] S)" by (auto simp add:hyper_seq_sem)
+       (sem_rel [ i \<mapsto> While (Assume (bs i);; Cs i);; Assume (lnot (bs i)) | i \<in> I ] S)" by (auto simp add:hyper_seq_sem)
 
   thus ?thesis 
     by (simp add: relational_hyper_hoare_tripleI while_cond_def)
@@ -2892,8 +2795,7 @@ theorem while_fixed_alignment:
   
 *)
 
-definition if_then_else_skip where
-"if_then_else_skip b C = if_then_else b C Skip "
+
 
 fun repeat_with_if where
 "repeat_with_if 0 b C = Skip" |
@@ -3093,7 +2995,7 @@ next
 qed
 
 
-lemma while_unfolded: "(\<forall>i\<in>I. (rf i) > 0) \<Longrightarrow> sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = (sem_lifted [ i \<mapsto> while_cond (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I ] S)"
+lemma while_unfolded: "(\<forall>i\<in>I. (rf i) > 0) \<Longrightarrow> sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = (sem_rel [ i \<mapsto> while_cond (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I ] S)"
   apply(simp only: sem_lifted_rewrite)
   apply(rule ext)
   apply(simp add: outsideI_preserved)
@@ -3313,12 +3215,12 @@ proof -
       with asm show False
         by(auto simp add:conj_def)
     qed
-    with asm assms(1) have "(interp_assert Iv)  (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
+    with asm assms(1) have "(interp_assert Iv)  (sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
       unfolding relational_hyper_hoare_triple_def conj_def
       by (simp add: holds_for_prog_set_def)
     moreover from \<open>J = I\<close> have "(map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) = (map_comprehension Cs (\<lambda>i. i \<in> I))"
       by(auto simp add:map_comprehension_def prog_set_or_skip_def)
-    ultimately show "interp_assert Iv (sem_lifted (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S)"
+    ultimately show "interp_assert Iv (sem_rel (map_comprehension (prog_set_or_skip J Cs) (\<lambda>i. i \<in> I)) S)"
       by (simp add: conj_def)
   qed
   from assms(2) have H2: "entails (interp_assert Iv) (can_step_any_unfinished I bs ?V)"
@@ -3329,10 +3231,10 @@ proof -
     fix S
     assume "interp_assert Iv S"
     with H1 H2 while_nonfixed_alignment[where ?Iv = "Iv" and ?I="I" and ?bs="bs" and V="?V" and ?Cs = "Cs"] 
-      have "conj (loop_cond_assert bs Iv) (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
+      have "conj (loop_cond_assert bs Iv) (holds_forall_hyper I (lnot_hyper bs)) (sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
         by (simp add: relational_hyper_hoare_tripleE)
     with assms(2) show"conj (disj (interp_assert Iv) (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs))
-                      (sem_lifted [i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I] S)" 
+                      (sem_rel [i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I] S)" 
       apply(auto simp add:entails_def conj_def disj_def low_exp_hyper_def)*)
 
 (*
@@ -3391,7 +3293,7 @@ abbreviation can_step_subset_or_all_finished2 where
 
 fun sem_lifted_stacked where
 "sem_lifted_stacked bs Cs S Js 0 = S" |
-"sem_lifted_stacked bs Cs S Js (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> Js n (sem_lifted_stacked bs Cs S Js n)] (sem_lifted_stacked bs Cs S Js n)"
+"sem_lifted_stacked bs Cs S Js (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> Js n (sem_lifted_stacked bs Cs S Js n)] (sem_lifted_stacked bs Cs S Js n)"
 
 
 
@@ -3436,7 +3338,7 @@ fun priority_JS_based_execution_aux where
      (let (Sn,l,q) = priority_JS_based_execution_aux bs Cs S JS I n;
           p = qth_program I q;
           J = priority_picker JS p n Sn;
-          Sn' = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] Sn
+          Sn' = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] Sn
       in
         if p \<in> J \<or> (holds_forall (lnot (bs p)) (Sn p)) then
           if Suc q < l then (Sn', l, Suc q)
@@ -3496,7 +3398,7 @@ qed
 
 
 lemma priority_JS_based_execution_step:
-  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
+  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
          (priority_JS_based_execution bs Cs S JS I n)"
 proof -
   obtain Sn l q where
@@ -3505,7 +3407,7 @@ proof -
   let ?p = "qth_program I q"
   let ?J = "priority_picker JS ?p n Sn"
   have "priority_JS_based_execution bs Cs S JS I (Suc n) =
-        sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
+        sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
           (priority_JS_based_execution bs Cs S JS I n)"
     unfolding priority_JS_based_execution_def
     using Haux
@@ -3527,7 +3429,7 @@ lemma priority_picker_in_or_none:
 lemma priority_JS_based_execution_step_strong:
   assumes nz: "\<forall>n S. JS n S \<noteq> {}"
   shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) =
-           sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
+           sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J]
              (priority_JS_based_execution bs Cs S JS I n)
          \<and> J \<in> JS n (priority_JS_based_execution bs Cs S JS I n)
          \<and> (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> J
@@ -3557,7 +3459,7 @@ proof -
 
   have Hstep:
     "priority_JS_based_execution bs Cs S JS I (Suc n) =
-      sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
+      sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
         (priority_JS_based_execution bs Cs S JS I n)"
     using Haux
     unfolding priority_JS_based_execution_def
@@ -3565,7 +3467,7 @@ proof -
 
   from Hstep Hpick Hstate
   have "priority_JS_based_execution bs Cs S JS I (Suc n) =
-          sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
+          sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J]
             (priority_JS_based_execution bs Cs S JS I n)
         \<and> ?J \<in> JS n (priority_JS_based_execution bs Cs S JS I n)
         \<and> (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> ?J
@@ -3579,7 +3481,7 @@ qed
 
 (*lemma priority_JS_based_execution_step_strong:
   assumes "\<forall>n S. JS n S \<noteq> {}"
-  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_lifted [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n)
+  shows "\<exists>J. priority_JS_based_execution bs Cs S JS I (Suc n) = sem_rel [i \<mapsto> if_then (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n)
          \<and> J \<in> JS n (priority_JS_based_execution bs Cs S JS I n)
          \<and> (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<in> J 
             \<or> (\<forall>J\<in>JS n (priority_JS_based_execution bs Cs S JS I n). (qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n)) \<notin> J)))"
@@ -3592,7 +3494,7 @@ proof (cases "priority_JS_based_execution_aux bs Cs S JS I n")
     using assms
     by (simp add: priority_picker_inJS)
   then show "\<exists>J. fst (priority_JS_based_execution_aux bs Cs S JS I (Suc n)) =
-           sem_lifted (map_comprehension (\<lambda>i. if_then (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (fst (priority_JS_based_execution_aux bs Cs S JS I n)) \<and>
+           sem_rel (map_comprehension (\<lambda>i. if_then (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (fst (priority_JS_based_execution_aux bs Cs S JS I n)) \<and>
            J \<in> JS n (fst (priority_JS_based_execution_aux bs Cs S JS I n)) "
     using fields
     by (auto simp add: Let_def)
@@ -3605,14 +3507,14 @@ lemma priority_JS_based_execution_base:
 
 fun sem_lifted_after_n_steps where
 "sem_lifted_after_n_steps bs Cs S I 0 = S" |
-"sem_lifted_after_n_steps bs Cs S I (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> I] (sem_lifted_after_n_steps bs Cs S I n)"
+"sem_lifted_after_n_steps bs Cs S I (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> I] (sem_lifted_after_n_steps bs Cs S I n)"
 
 
 
 
 lemma state_preservation:
   assumes "\<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     and "n' \<ge> n"
     and  JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
   shows "\<forall>n''. n \<le> n'' \<and> n''\<le>n' \<longrightarrow> (priority_JS_based_execution bs Cs S JS I n'') i = (priority_JS_based_execution bs Cs S JS I n) i"
@@ -3633,7 +3535,7 @@ proof(intro allI ballI impI, elim conjE)
          (\<exists>J\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n'').
              i \<in> J \<and>
              priority_JS_based_execution bs Cs S JS I (Suc n'') =
-             sem_lifted (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n'')))" by auto
+             sem_rel (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n'')))" by auto
     have "n = Suc m \<or> n\<noteq>Suc m" by auto
     then show ?case 
     proof
@@ -3643,14 +3545,14 @@ proof(intro allI ballI impI, elim conjE)
       assume "n \<noteq> Suc m"
       with Suc have "n \<le> m" by auto
       with Suc have H:"priority_JS_based_execution bs Cs S JS I m i = priority_JS_based_execution bs Cs S JS I n i" by auto
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"priority_JS_based_execution bs Cs S JS I (Suc m) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (priority_JS_based_execution bs Cs S JS I m)"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"priority_JS_based_execution bs Cs S JS I (Suc m) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (priority_JS_based_execution bs Cs S JS I m)"
                                                                            and jinJS:"J' \<in> JS m (priority_JS_based_execution bs Cs S JS I m)" by blast
       show ?case
       proof (rule ccontr)
         assume "priority_JS_based_execution bs Cs S JS I (Suc m) i \<noteq> priority_JS_based_execution bs Cs S JS I n i"
         hence "i\<in>J'"
           apply(simp only:eq)
-          apply(auto simp add:sem_lifted_def map_comprehension_def)
+          apply(auto simp add:sem_rel_def map_comprehension_def)
           using H by auto
         from \<open>i\<in>J'\<close> eq jinJS H0 \<open>n \<le> m\<close> show "False" by blast
       qed
@@ -4747,7 +4649,7 @@ lemma all_programs_reexecuted_or_dead:
     and JS_nonempty: "\<And>n S.((JS n S) \<noteq> {})"
   shows "\<forall>i\<in>I. \<forall>n. \<not>(holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n i)) \<longrightarrow> 
       (\<exists>n'\<ge>n. (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
 proof (intro allI ballI impI)
   fix i n
   assume asm1:"i\<in>I"
@@ -4758,19 +4660,19 @@ proof (intro allI ballI impI)
   from asm1 H assms(2) obtain n' where "(n'\<ge>n)" and  n'prop:"((qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'))) = i)"
     by auto
   have "(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))
         \<or> \<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     by auto
   thus "(\<exists>n'\<ge>n. (\<exists>J \<in> JS n' (priority_JS_based_execution bs Cs S JS I n'). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n')))"
   proof
     assume "(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     thus ?thesis by auto
   next
     assume asm:"\<not>(\<exists>n''\<ge>n. n'' < n' \<and> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J \<and>
-        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
+        priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n'')))"
     from \<open>n'\<ge>n\<close> asm state_preservation[of n n' JS bs Cs S I i] JS_nonempty have "(priority_JS_based_execution bs Cs S JS I n') i = (priority_JS_based_execution bs Cs S JS I n) i"
       by blast
     with asm2 have H2:"\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n' i)" by auto
@@ -4780,26 +4682,26 @@ proof (intro allI ballI impI)
     with assms(1) asm1 obtain n'' where "(n''\<ge>n')" and n''prop:"(holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)) \<or> (\<exists>J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n''). i\<in>J)"
       by blast
     have "(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))
       \<or> \<not>(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
     by auto
     thus ?thesis 
     proof
       assume "(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
       thus ?thesis using \<open>n \<le> n'\<close>
         by (meson dual_order.trans)
     next
       assume asm:"\<not>(\<exists>n'''\<ge>n'. n''' < n'' \<and> (\<exists>J \<in> JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>
-      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
+      priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] (priority_JS_based_execution bs Cs S JS I n''')))"
       from \<open>n''\<ge>n'\<close>  asm state_preservation[of n' n'' JS bs Cs S I i] JS_nonempty have spres:"\<forall>n. n'\<le>n \<and> n \<le> n'' \<longrightarrow> (priority_JS_based_execution bs Cs S JS I n) i = (priority_JS_based_execution bs Cs S JS I n') i"
         by blast
       with \<open>n' \<le> n''\<close> have "(priority_JS_based_execution bs Cs S JS I n'') i = (priority_JS_based_execution bs Cs S JS I n') i"
         by blast
       with H2 have H4:"\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)" by auto
       with n''prop have H3:"(\<exists>J\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n''). i \<in> J)" by auto
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (priority_JS_based_execution bs Cs S JS I n'')"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"priority_JS_based_execution bs Cs S JS I (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (priority_JS_based_execution bs Cs S JS I n'')"
                                                                      and jinJS:"J'' \<in> JS n''(priority_JS_based_execution bs Cs S JS I n'')" 
                                                                      and priorJS:"qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'')) \<in> J''
                                                                           \<or> (\<forall>J'' \<in> JS n''(priority_JS_based_execution bs Cs S JS I n''). qth_program I (current_q (priority_JS_based_execution_aux bs Cs S JS I n'')) \<notin>J'')"
@@ -4825,7 +4727,7 @@ proof (intro allI ballI impI)
             by (metis le_refl lessI nless_le)
           from Suc have "\<forall>n. n' \<le> n \<and> n \<le> n'' \<longrightarrow> priority_JS_based_execution bs Cs S JS I n i = priority_JS_based_execution bs Cs S JS I n' i"
             by (meson le_imp_less_Suc nless_le)
-          moreover from Suc have "\<not> (\<exists>n'''\<ge>n'. n''' < n'' \<and>(\<exists>J\<in>JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_lifted (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n''')))" 
+          moreover from Suc have "\<not> (\<exists>n'''\<ge>n'. n''' < n'' \<and>(\<exists>J\<in>JS n''' (priority_JS_based_execution bs Cs S JS I n'''). i \<in> J \<and>priority_JS_based_execution bs Cs S JS I (Suc n''') = sem_rel (map_comprehension (\<lambda>i. if_then_else_skip (bs i) (Cs i)) (\<lambda>i. i \<in> J)) (priority_JS_based_execution bs Cs S JS I n''')))" 
             using less_SucI by presburger
           moreover from nseq Suc have "\<not> holds_forall (lnot (bs i)) (priority_JS_based_execution bs Cs S JS I n'' i)"
             by presburger
@@ -4848,7 +4750,7 @@ proof (intro allI ballI impI)
             have jin:"?J \<in> JS n'' (priority_JS_based_execution bs Cs S JS I n'')" 
               apply(simp only:eq2) 
               using JS_nonempty priority_picker_inJS by metis
-            have step:"(priority_JS_based_execution bs Cs S JS I (Suc n'')) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J] (priority_JS_based_execution bs Cs S JS I n'')"
+            have step:"(priority_JS_based_execution bs Cs S JS I (Suc n'')) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> ?J] (priority_JS_based_execution bs Cs S JS I n'')"
               apply(simp only: eq2[symmetric]) unfolding priority_JS_based_execution_def
               using Haux
               by(auto simp add:Let_def)
@@ -4953,9 +4855,9 @@ proof(intro relational_hyper_hoare_tripleI)
     by metis
 
   let ?Ss = "priority_JS_based_execution bs Cs S JS I"
-  let ?Ss' = "\<lambda>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n)"
+  let ?Ss' = "\<lambda>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n)"
   let ?after_n = "sem_lifted_after_n_steps bs Cs S I"
-  let ?after_n_finished = "\<lambda>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n)"
+  let ?after_n_finished = "\<lambda>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n)"
 
   have jsexec_ivq:"(\<forall>n::nat. ((Iv n) (?Ss n) \<or> holds_forall_hyper I (lnot_hyper bs) (?Ss n)) \<and> (Q (?Ss' n)))" 
   proof 
@@ -4967,7 +4869,7 @@ proof(intro relational_hyper_hoare_tripleI)
         by (metis assms(4) relational_hyper_hoare_tripleE)
     next
       case (Suc n)
-      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+      from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                            and jinJS:"J' \<in> JS n (?Ss n)" by blast
       have jin:"J' \<in> Pow I - {{}}" using jinJS JS_subset[of "n" "?Ss n"]
         by blast
@@ -4991,7 +4893,7 @@ proof(intro relational_hyper_hoare_tripleI)
           apply(simp only:eq)
           apply(rule)
           using asm2 jin
-          apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def holds_forall_hyper_def lnot_hyper_def)
+          apply(auto simp add:sem_rel_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def holds_forall_hyper_def lnot_hyper_def)
           apply (metis SemSeq SemSkip SemAssume SemIf2 lnot_def snd_conv subsetD)
           by (metis in_mono snd_eqD)
         then show ?case using Suc asm2 by auto
@@ -5017,7 +4919,7 @@ proof(intro relational_hyper_hoare_tripleI)
       next
         case (Suc n)
         from Suc obtain n' where H:"(?Ss n) i  = ((?after_n) n') i" by blast
-        from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+        from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                            and jinJS:"J' \<in> JS n (?Ss n)" by blast
         have "i \<notin> J' \<or> i \<in> J'" by auto
         then show ?case 
@@ -5026,7 +4928,7 @@ proof(intro relational_hyper_hoare_tripleI)
           have "(?Ss (Suc n)) i = (?Ss n) i"
             apply(simp only:eq)
             using asm
-            by(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+            by(auto simp add:map_comprehension_def sem_rel_def sem_def)
           with H have "(?Ss (Suc n)) i = ((?after_n) n') i" 
             by auto
           thus ?case 
@@ -5035,7 +4937,7 @@ proof(intro relational_hyper_hoare_tripleI)
           assume asm:"i \<in> J'"
           have "(?Ss (Suc n)) i = ((?after_n) (Suc n')) i" 
             apply(simp only:eq)
-            apply(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+            apply(auto simp add:map_comprehension_def sem_rel_def sem_def)
             using asm H apply auto[1]
             using H apply auto[1]
             apply (metis Diff_iff Pow_iff insert_Diff insert_subset JS_subset jinJS)
@@ -5046,9 +4948,9 @@ proof(intro relational_hyper_hoare_tripleI)
         qed
       qed
     qed
-    hence "\<And>n. \<exists>n'. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n) i = sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n') i"
-      by (metis (lifting) sem_lifted_def)
-    thus "(\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n) i) \<subseteq> (\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i)"
+    hence "\<And>n. \<exists>n'. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n) i = sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n') i"
+      by (metis (lifting) sem_rel_def)
+    thus "(\<Union>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n) i) \<subseteq> (\<Union>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i)"
       by blast
   next
     fix i
@@ -5071,11 +4973,11 @@ proof(intro relational_hyper_hoare_tripleI)
           assume asm:"i \<notin> I"
           have "(?after_n (Suc n)) i = (?Ss n') i" 
             using asm H
-            by(auto simp add:map_comprehension_def sem_lifted_def sem_def)
+            by(auto simp add:map_comprehension_def sem_rel_def sem_def)
           then show ?case by blast
         next 
           assume asm: "i \<in> I"
-          from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+          from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                              and jinJS:"J' \<in> JS n (?Ss n)" by blast
           have H1:"(\<forall>i\<in>I. \<forall>n. (\<exists>n'\<ge>n. \<not>(holds_forall (lnot (bs i)) (?Ss n' i)) \<longrightarrow> (\<exists>J \<in> JS n' (?Ss n'). i\<in>J)))" 
           proof (intro allI ballI)
@@ -5119,7 +5021,7 @@ proof(intro relational_hyper_hoare_tripleI)
               thus ?thesis by auto
             qed
           qed
-          let ?executes = "(\<lambda>n'. \<lambda>i. \<lambda>JS. (\<exists>J' \<in> JS n' (?Ss n'). (i \<in> J') \<and> (?Ss (Suc n') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n'))))"
+          let ?executes = "(\<lambda>n'. \<lambda>i. \<lambda>JS. (\<exists>J' \<in> JS n' (?Ss n'). (i \<in> J') \<and> (?Ss (Suc n') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n'))))"
           from H1 all_q_revisited[of I bs Cs S JS] all_programs_reexecuted_or_dead[of I bs Cs S JS] JS_nonempty \<open>I \<noteq> {}\<close>
               have "\<forall>n. \<forall>i\<in>I. (holds_forall (lnot (bs i)) ((?Ss n) i)) 
             \<or> (\<exists>n' \<ge> n. ?executes n' i JS)" by (smt (z3))
@@ -5146,7 +5048,7 @@ proof(intro relational_hyper_hoare_tripleI)
             with H have "(holds_forall (lnot (bs i)) ((?after_n n) i))"
               by simp
             from this have "((?after_n (Suc n)) i) = ((?after_n n) i)" 
-              apply(auto simp add:holds_forall_def lnot_def sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def)
+              apply(auto simp add:holds_forall_def lnot_def sem_rel_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def)
               by (metis SemSkip SemSeq SemAssume SemIf2 lnot_def snd_conv)
             with H show ?case
               by auto
@@ -5168,7 +5070,7 @@ proof(intro relational_hyper_hoare_tripleI)
                 then show ?case by auto
               next
                 case (Suc n''')
-                from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"?Ss (Suc n''') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n''')"
+                from priority_JS_based_execution_step_strong JS_nonempty obtain J'' where eq:"?Ss (Suc n''') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n''')"
                                                                                    and jinJS:"J'' \<in> JS n''' (?Ss n''')" by blast
                 from Suc no_less have H1:"\<not>(?executes n''' i JS)" 
                   by (simp add: less_eq_Suc_le)
@@ -5178,19 +5080,19 @@ proof(intro relational_hyper_hoare_tripleI)
                   using not_less_less_Suc_eq by auto
                 show ?case 
                   apply(simp only:eq)
-                  apply(auto simp add:sem_lifted_def map_comprehension_def)
+                  apply(auto simp add:sem_rel_def map_comprehension_def)
                   using H2 \<open>i \<notin> J''\<close>
                   by(auto simp add: jinJS)
               qed
             qed
             from i_exec obtain J'' where "J''\<in>JS n'' (priority_JS_based_execution bs Cs S JS I n'')"
                                       and iinJ'':"i \<in> J''"
-                                      and eq:"?Ss (Suc n'') = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n'')"
+                                      and eq:"?Ss (Suc n'') = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J''] (?Ss n'')"
               by blast
             have "(?after_n (Suc n)) i = (?Ss (Suc n'')) i"
               apply(simp only:eq)
               using asm H H2 iinJ''
-              apply(auto simp add:sem_lifted_def map_comprehension_def)
+              apply(auto simp add:sem_rel_def map_comprehension_def)
               using ns_ineq apply auto[1]
               using ns_ineq by auto[1]
             then show ?case
@@ -5199,15 +5101,15 @@ proof(intro relational_hyper_hoare_tripleI)
         qed
       qed
     qed
-    hence "\<And>n. \<exists>n'. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i = sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n') i" 
-      by (metis (lifting) sem_lifted_def)
-    thus "(\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i) \<subseteq> (\<Union>n. sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss  n) i)" 
+    hence "\<And>n. \<exists>n'. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i = sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss n') i" 
+      by (metis (lifting) sem_rel_def)
+    thus "(\<Union>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?after_n n) i) \<subseteq> (\<Union>n. sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] (?Ss  n) i)" 
       by blast
   qed
  
-  have wh_un_ss: "sem_lifted [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S = hyper_union (?after_n )"
+  have wh_un_ss: "sem_rel [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S = hyper_union (?after_n )"
     apply(rule)
-    apply(auto simp add:sem_lifted_def map_comprehension_def hyper_union_def)
+    apply(auto simp add:sem_rel_def map_comprehension_def hyper_union_def)
        prefer 3
     apply (metis sem_lifted_after_n_steps.simps(1))
       prefer 3
@@ -5221,7 +5123,7 @@ proof(intro relational_hyper_hoare_tripleI)
       case (Suc nat)
       have "?after_n (Suc nat) x = ?after_n (nat) x"
         using Suc
-        by(auto simp add:sem_lifted_def map_comprehension_def)
+        by(auto simp add:sem_rel_def map_comprehension_def)
       then show ?thesis
         using Suc.IH Suc.prems(2) prems(1) by auto
     qed
@@ -5236,27 +5138,27 @@ proof(intro relational_hyper_hoare_tripleI)
       case (SemWhileIter \<sigma> \<sigma>' \<sigma>'')
       have H1:"(l, \<sigma>') \<in> sem_lifted_after_n_steps bs Cs S I (Suc 0) i" 
         using \<open>i \<in> I\<close> \<open>\<langle>Assume (bs i) ;; Cs i, \<sigma>\<rangle> \<rightarrow> \<sigma>'\<close>
-        apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def)
+        apply(auto simp add:sem_rel_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def)
         by (meson SemIf1 SemWhileIter.hyps(1) SemWhileIter.prems(2))
       have H2:"\<And>n n' s. s \<in> sem_lifted_after_n_steps bs Cs (sem_lifted_after_n_steps bs Cs S I (Suc 0)) I n i 
               \<longrightarrow> s \<in> sem_lifted_after_n_steps bs Cs S I (Suc n) i" 
         using \<open>i \<in> I\<close>
-        apply(auto simp add:sem_lifted_def map_comprehension_def)
+        apply(auto simp add:sem_rel_def map_comprehension_def)
       proof -
         fix n a b
         assume asm1: "i \<in> I"
-        assume asm2: "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I n i"
+        assume asm2: "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_rel (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I n i"
         from asm1 asm2 show "(a, b) \<in> sem (if_then_else_skip (bs i) (Cs i)) (sem_lifted_after_n_steps bs Cs S I n i)"
         proof (induction n arbitrary: b )
           case 0
           then show ?case 
-            by(auto simp add:sem_lifted_def)
+            by(auto simp add:sem_rel_def)
         next
           case (Suc n)
-          hence "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_lifted (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I (Suc n) i" by auto
+          hence "(a, b) \<in> sem_lifted_after_n_steps bs Cs (sem_rel (\<lambda>i. if i \<in> I then Some (if_then_else_skip (bs i) (Cs i)) else None) S) I (Suc n) i" by auto
           from this show ?case 
             using Suc
-            apply(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+            apply(auto simp add:sem_rel_def map_comprehension_def sem_def)
             by blast
         qed
       qed        
@@ -5284,7 +5186,7 @@ proof(intro relational_hyper_hoare_tripleI)
         using while_iter_reversed by auto
       obtain \<sigma>'' where "(l, \<sigma>'') \<in> sem_lifted_after_n_steps bs Cs S I n i" and ifte:"\<langle>if_then_else_skip (bs i) (Cs i), \<sigma>''\<rangle> \<rightarrow> \<sigma>'"
         using \<open>(l, \<sigma>') \<in> sem_lifted_after_n_steps bs Cs S I (Suc n) i\<close> \<open>i\<in>I\<close>
-        by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+        by(auto simp add:sem_rel_def map_comprehension_def sem_def)
       with Suc obtain \<sigma> where \<sigma>_obt: "(l, \<sigma>) \<in> S i \<and> \<langle>While (Assume (bs i) ;; Cs i), \<sigma>\<rangle> \<rightarrow> \<sigma>''"
         by blast
      have H:"\<not> bs i \<sigma>'' \<Longrightarrow> \<sigma>'' = \<sigma>'"
@@ -5305,13 +5207,13 @@ proof(intro relational_hyper_hoare_tripleI)
     qed
   qed
 
-  have wh_un: "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?after_n_finished)" 
+  have wh_un: "sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S = hyper_union (?after_n_finished)" 
   proof(rule)
     fix i
-    from wh_un_ss have H: "sem_lifted [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S i = hyper_union (?after_n) i" by auto
-    show "sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S i = hyper_union (?after_n_finished) i"
+    from wh_un_ss have H: "sem_rel [ i \<mapsto> While (Assume (bs i) ;; Cs i) | i \<in> I ] S i = hyper_union (?after_n) i" by auto
+    show "sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S i = hyper_union (?after_n_finished) i"
     using H unfolding hyper_union_def while_cond_def 
-    apply(auto simp add:sem_lifted_def map_comprehension_def sem_def lnot_def set_eq_iff)
+    apply(auto simp add:sem_rel_def map_comprehension_def sem_def lnot_def set_eq_iff)
      apply (metis SemAssume lnot_def)
     by (metis SemAssume SemSeq lnot_def)
   qed
@@ -5320,37 +5222,37 @@ proof(intro relational_hyper_hoare_tripleI)
   proof(intro hyper_ascendingI hyper_set_leI)
     fix n i
     assume "i\<in>I"
-    from priority_JS_based_execution_step obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+    from priority_JS_based_execution_step obtain J' where eq:"?Ss (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
       by blast
-    show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I n) i
-           \<subseteq> sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I (Suc n)) i"
+    show "sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I n) i
+           \<subseteq> sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I (Suc n)) i"
       using \<open>i \<in> I\<close>
       apply(simp only:eq)
-      apply(auto simp add:sem_lifted_def sem_def map_comprehension_def lnot_def if_then_else_skip_def if_then_else_def)
+      apply(auto simp add:sem_rel_def sem_def map_comprehension_def lnot_def if_then_else_skip_def if_then_else_def)
       by (metis SemSkip SemSeq SemAssume SemIf2 lnot_def)
   next
     fix n i
     assume "i \<notin> I"
-    from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
+    from priority_JS_based_execution_step_strong JS_nonempty obtain J' where eq:"?Ss (Suc n) = sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J'] (?Ss n)"
                                                                           and jinJS:"J' \<in> JS n (?Ss n)"
       by blast
     from \<open>i\<notin>I\<close> priority_picker_inJS JS_nonempty
-    show "sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I n) i =
-           sem_lifted (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I (Suc n)) i"
+    show "sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I n) i =
+           sem_rel (map_comprehension (\<lambda>i. Assume (lnot (bs i))) (\<lambda>i. i \<in> I)) (priority_JS_based_execution bs Cs S JS I (Suc n)) i"
       using \<open>i \<notin> I\<close> 
       apply(simp only:eq)
       using jinJS JS_subset[of "n" "(?Ss n)"] \<open>i \<notin> I\<close>
-      by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
+      by(auto simp add:sem_rel_def map_comprehension_def sem_def)
   qed
 
   from jsexec_ivq hasc_ss' assms(5) have qinf_un: "Q_inf (hyper_union (?Ss'))" 
     unfolding relational_upwards_closed_def by simp
 
-  have hfa_wh: "(holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)" 
+  have hfa_wh: "(holds_forall_hyper I (lnot_hyper bs)) (sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)" 
     unfolding while_cond_def
-  by(auto simp add:sem_lifted_def holds_forall_hyper_def lnot_hyper_def lnot_def map_comprehension_def sem_def)
+  by(auto simp add:sem_rel_def holds_forall_hyper_def lnot_hyper_def lnot_def map_comprehension_def sem_def)
 
-  from wh_un un_jsexec_sound qinf_un hfa_wh show "(conj Q_inf (holds_forall_hyper I (lnot_hyper bs))) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
+  from wh_un un_jsexec_sound qinf_un hfa_wh show "(conj Q_inf (holds_forall_hyper I (lnot_hyper bs))) (sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
     by (simp add: conj_def)
 qed
 
@@ -5369,16 +5271,16 @@ proof -
     fix n J S
     assume asm1: "J \<in> Pow I - {{}}"
     assume asm2: "Logic.conj (Iv n) (Logic.conj (holds_for_prog_set J bs) (V J)) S"
-    with asm1 asm2 assms(1) have H:"Iv (Suc n) (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)" 
+    with asm1 asm2 assms(1) have H:"Iv (Suc n) (sem_rel [i \<mapsto> Cs i | i \<in> J] S)" 
       unfolding relational_hyper_hoare_triple_def
       by blast
-    have "(sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S) = (sem_lifted [i \<mapsto> Cs i | i \<in> J] S)"
+    have "(sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S) = (sem_rel [i \<mapsto> Cs i | i \<in> J] S)"
       apply(rule)
       using asm2
-      apply(auto simp add:sem_lifted_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def conj_def holds_for_prog_set_def holds_forall_hyper_def)
+      apply(auto simp add:sem_rel_def map_comprehension_def sem_def if_then_else_skip_def if_then_else_def lnot_def conj_def holds_for_prog_set_def holds_forall_hyper_def)
        apply fastforce
       by (metis SemAssume SemIf1 SemSeq snd_conv)
-    with H show "Iv (Suc n) (sem_lifted [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S)" by auto
+    with H show "Iv (Suc n) (sem_rel [i \<mapsto> if_then_else_skip (bs i) (Cs i) | i \<in> J] S)" by auto
   qed
   moreover have "\<forall>n. (all_unfinished_can_be_stepped_after2' n Iv I bs ?V')" using assms(2) by simp
   moreover have "\<forall>n. entails (Iv n) (can_step_subset_or_all_finished2 I bs ?V')" using assms(3) by simp
@@ -5388,10 +5290,10 @@ qed
 
 lemma no_program_sem_lifted: 
   assumes "I = {}"
-  shows "sem_lifted [i \<mapsto> Cs i | i \<in> I] S = S"
+  shows "sem_rel [i \<mapsto> Cs i | i \<in> I] S = S"
   apply(rule)
   using assms
-  by(auto simp add:sem_lifted_def map_comprehension_def )
+  by(auto simp add:sem_rel_def map_comprehension_def )
 
 text\<open>Generalization of the conditional alignment rule from the Relational Decomposition paper to infinitely many programs.
       The rule assumes:
@@ -5415,12 +5317,12 @@ proof -
       assume "Iv S"
       have "(holds_forall_hyper I (lnot_hyper bs)) S"
         by(auto simp add:holds_forall_hyper_def lnot_hyper_def \<open>I = {}\<close>)
-      from no_program_sem_lifted have "sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S = S"
+      from no_program_sem_lifted have "sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S = S"
         using \<open>I = {}\<close> by auto
       with assms(3) have "Q S"
         by (metis \<open>Iv S\<close> relational_hyper_hoare_triple_def)
       from \<open>(holds_forall_hyper I (lnot_hyper bs)) S\<close> \<open>Q S\<close> have "(conj (holds_forall_hyper I (lnot_hyper bs)) Q) S" unfolding conj_def by auto
-      with no_program_sem_lifted \<open>I = {}\<close> show "conj Q (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted (map_comprehension (\<lambda>i. while_cond (bs i) (Cs i)) (\<lambda>i. i \<in> I)) S)" 
+      with no_program_sem_lifted \<open>I = {}\<close> show "conj Q (holds_forall_hyper I (lnot_hyper bs)) (sem_rel (map_comprehension (\<lambda>i. while_cond (bs i) (Cs i)) (\<lambda>i. i \<in> I)) S)" 
         by (metis (full_types) conj_def)
     qed
   next
@@ -5463,12 +5365,12 @@ proof -
       with asm show False
         by(auto simp add:conj_def)
     qed
-    with asm assms(1) have "conj Iv (low_exp_hyper I bs) (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
+    with asm assms(1) have "conj Iv (low_exp_hyper I bs) (sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
       unfolding relational_hyper_hoare_triple_def conj_def
       by (simp add: holds_for_prog_set_def)
     moreover from \<open>J = I\<close> have "[i \<mapsto>  Cs i | i \<in> J] = (map_comprehension Cs (\<lambda>i. i \<in> I))"
       by(auto simp add:map_comprehension_def)
-    ultimately show "?Iv (sem_lifted [i \<mapsto>  Cs i | i \<in> J] S)"
+    ultimately show "?Iv (sem_rel [i \<mapsto>  Cs i | i \<in> J] S)"
       by (simp add: conj_def)
   qed
   have H2: "entails ?Iv (can_step_any_unfinished I bs ?V)"
@@ -5482,25 +5384,25 @@ proof -
       by (auto simp add: conj_def)
     hence "holds_forall_hyper I bs S \<or> holds_forall_hyper I (lnot_hyper bs) S "
       by (simp add: low_exp_either)
-    thus "disj Iv (hyper_emp I) (sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S)"
+    thus "disj Iv (hyper_emp I) (sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S)"
     proof
       assume asm: "holds_forall_hyper I bs S"
-      have "(sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S) = (\<lambda>i.(if (i\<in>I) then {} else S i))"
+      have "(sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S) = (\<lambda>i.(if (i\<in>I) then {} else S i))"
         apply(rule)
         using asm
-        apply(auto simp add:holds_forall_hyper_def map_comprehension_def sem_lifted_def sem_def lnot_def)
+        apply(auto simp add:holds_forall_hyper_def map_comprehension_def sem_rel_def sem_def lnot_def)
         by fastforce
       moreover have "(hyper_emp I) (\<lambda>i.(if (i\<in>I) then {} else S i))"
         by(auto simp add:hyper_emp_def)
-      ultimately have "(hyper_emp I) (sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S)" by auto
+      ultimately have "(hyper_emp I) (sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S)" by auto
       thus ?thesis 
         by (simp add: disj_def)
     next
       assume asm: "holds_forall_hyper I (lnot_hyper bs) S"
-      have "(sem_lifted [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S) = S"
+      have "(sem_rel [i \<mapsto> Assume (lnot (bs i)) | i \<in> I] S) = S"
         apply(rule)
         using asm
-        apply(auto simp add:sem_lifted_def map_comprehension_def sem_def holds_forall_hyper_def lnot_hyper_def)
+        apply(auto simp add:sem_rel_def map_comprehension_def sem_def holds_forall_hyper_def lnot_hyper_def)
         by (metis SemAssume lnot_def sndI)
       with \<open>Iv S\<close> show ?thesis
         by (simp add: disj_def)
@@ -5511,7 +5413,7 @@ proof -
     fix S
     assume "conj Iv (low_exp_hyper I bs) S"
     with H1 H2 H3 assms(2) while_nonfixed_alignment3[of "I" "?Iv" "bs"  "?V"  "Cs" "?Q"] 
-      show "conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs)) (sem_lifted [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
+      show "conj (disj Iv (hyper_emp I)) (holds_forall_hyper I (lnot_hyper bs)) (sem_rel [ i \<mapsto> (while_cond (bs i) (Cs i)) | i \<in> I ] S)"
         by (simp add: relational_hyper_hoare_tripleE)
   qed
 qed
@@ -5557,31 +5459,31 @@ proof -
         assume asm: "conj Iv (conj (holds_for_prog_set J bs) (?V' J)) S"
         hence "((\<forall>i\<in>J. V i S)) \<or> U S"
           by (simp add: conj_def disj_def)
-        thus "Iv (sem_lifted [i \<mapsto>  Cs i | i \<in> J] S) "
+        thus "Iv (sem_rel [i \<mapsto>  Cs i | i \<in> J] S) "
         proof
           assume "\<forall>i\<in>J. V i S"
           with asm2 have "V j S"
             by simp
           with asm have "conj Iv (conj (holds_for_prog j bs) (V j)) S"
             by (simp add: asm2 conj_def holds_for_prog_def holds_for_prog_set_def holds_forall_hyper_def)
-          with assms(2) \<open>j\<in>I\<close> have "Iv (sem_lifted [j \<mapsto> Cs j] S)"
+          with assms(2) \<open>j\<in>I\<close> have "Iv (sem_rel [j \<mapsto> Cs j] S)"
             using relational_hyper_hoare_tripleE by blast
-          moreover have "(sem_lifted [j \<mapsto> Cs j] S) = sem_lifted [i \<mapsto>  Cs i | i \<in> J] S"
+          moreover have "(sem_rel [j \<mapsto> Cs j] S) = sem_rel [i \<mapsto>  Cs i | i \<in> J] S"
             apply(rule) 
             using asm2 \<open>j\<in>I\<close>
-            by(auto simp add:sem_lifted_def map_comprehension_def)
+            by(auto simp add:sem_rel_def map_comprehension_def)
           ultimately show ?thesis 
             by simp
         next
           assume "U S"
           with asm have "conj Iv (conj (holds_forall_hyper I bs) U) S"
             by (metis (lifting) \<open>j \<in> I\<close> asm0 asm2 card_1_singletonE conj_def empty_iff holds_for_prog_set_def insert_iff)
-          with assms(1) have "Iv (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
+          with assms(1) have "Iv (sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) S)"
             by (simp add: relational_hyper_hoare_triple_def)
-          moreover have "(sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> I)) S) = (sem_lifted (map_comprehension Cs (\<lambda>i. i \<in> J)) S)"
+          moreover have "(sem_rel (map_comprehension Cs (\<lambda>i. i \<in> I)) S) = (sem_rel (map_comprehension Cs (\<lambda>i. i \<in> J)) S)"
             apply(rule)
             using asm2 \<open>j\<in>I\<close>
-            apply(auto simp add:sem_lifted_def map_comprehension_def)
+            apply(auto simp add:sem_rel_def map_comprehension_def)
             using asm0 card_1_singletonE apply blast
             using asm0 card_1_singletonE by blast
           ultimately show ?thesis  by auto
@@ -5799,9 +5701,9 @@ proof -
   let ?V = "\<lambda>J. if J = I then (\<lambda>S. True) else (\<lambda>S. False)"
   let ?Iv2 = "\<lambda>n. Iv"
   let ?Cs2 = "\<lambda>i. repeat_with_if (rf i) (bs i) (Cs i)"
-  have "\<And>S. sem_lifted [i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I] S = sem_lifted [i \<mapsto> if_then_else_skip (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I] S"
+  have "\<And>S. sem_rel [i \<mapsto> repeat_with_if (rf i) (bs i) (Cs i) | i \<in> I] S = sem_rel [i \<mapsto> if_then_else_skip (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I] S"
     apply(rule)
-    apply(auto simp add:sem_lifted_def map_comprehension_def) using if_repeat_id assms(2)
+    apply(auto simp add:sem_rel_def map_comprehension_def) using if_repeat_id assms(2)
      apply metis
     by (simp add: assms(2) if_repeat_id)
   with assms(1) have H:"\<Turnstile> { Iv } [[i \<mapsto> if_then_else_skip (bs i) (repeat_with_if (rf i) (bs i) (Cs i)) | i \<in> I]] { Iv }"
@@ -5895,21 +5797,21 @@ lemma map_add_com:
 
 lemma conj_ext_main:
   assumes "((dom Cs2) - (dom Cs1)) \<in> irl_idcs Q1"
-      and "Q1 (sem_lifted Cs1 S)"
-    shows "Q1 (sem_lifted (Cs2 ++ Cs1) S)"
+      and "Q1 (sem_rel Cs1 S)"
+    shows "Q1 (sem_rel (Cs2 ++ Cs1) S)"
 proof -
-  have H: "\<forall>i\<in>(UNIV - ((dom Cs2) - (dom Cs1))). (sem_lifted (Cs2 ++ Cs1) S) i = (sem_lifted Cs1 S) i"
-    by (metis Diff_iff map_add_dom_app_simps(1,2) sem_lifted_def)
-  have "\<forall>i\<in>((dom Cs2) - (dom Cs1)). (sem_lifted (Cs2 ++ Cs1) S) i = (sem_lifted Cs2 S) i"
-    by (simp add: map_add_dom_app_simps(3) sem_lifted_def)
-  let ?ff = "(override_on (sem_lifted Cs1 S) (sem_lifted (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1))"
-  have H2: "?ff = (sem_lifted (Cs2 ++ Cs1) S)" 
+  have H: "\<forall>i\<in>(UNIV - ((dom Cs2) - (dom Cs1))). (sem_rel (Cs2 ++ Cs1) S) i = (sem_rel Cs1 S) i"
+    by (metis Diff_iff map_add_dom_app_simps(1,2) sem_rel_def)
+  have "\<forall>i\<in>((dom Cs2) - (dom Cs1)). (sem_rel (Cs2 ++ Cs1) S) i = (sem_rel Cs2 S) i"
+    by (simp add: map_add_dom_app_simps(3) sem_rel_def)
+  let ?ff = "(override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1))"
+  have H2: "?ff = (sem_rel (Cs2 ++ Cs1) S)" 
   proof
     fix i 
-    from H show "override_on (sem_lifted Cs1 S) (sem_lifted (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1) i = sem_lifted (Cs2 ++ Cs1) S i"
+    from H show "override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1) i = sem_rel (Cs2 ++ Cs1) S i"
       by (metis DiffI UNIV_I override_on_apply_in override_on_apply_notin)
   qed
-  have "(Q1 (sem_lifted Cs1 S) \<longleftrightarrow> Q1 (override_on (sem_lifted Cs1 S) (sem_lifted (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1)))" using assms(1)
+  have "(Q1 (sem_rel Cs1 S) \<longleftrightarrow> Q1 (override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1)))" using assms(1)
     by (simp add: irl_idcs_def)
   with assms(2) have "Q1 ?ff" by auto
   with H2 show ?thesis by auto
@@ -5926,26 +5828,26 @@ theorem conj_ext:
 proof (rule relational_hyper_hoare_tripleI)
   fix S 
   assume "P S"
-  from \<open>P S\<close> assms(1) relational_hyper_hoare_tripleE have H1: "Q1 (sem_lifted (Cs1) S)" by auto
-  from \<open>P S\<close> assms(2) relational_hyper_hoare_tripleE have H2: "Q2 (sem_lifted (Cs2) S)" by auto
-  from map_add_com conj_ext_main H1 assms(3,5) have "Q1 (sem_lifted (Cs1 ++ Cs2) S)" by metis
-  moreover from conj_ext_main H2 assms(4,5) have "Q2 (sem_lifted (Cs1 ++ Cs2) S)" by metis  
-  ultimately show "conj Q1 Q2 (sem_lifted (Cs1 ++ Cs2) S)" unfolding conj_def by auto
+  from \<open>P S\<close> assms(1) relational_hyper_hoare_tripleE have H1: "Q1 (sem_rel (Cs1) S)" by auto
+  from \<open>P S\<close> assms(2) relational_hyper_hoare_tripleE have H2: "Q2 (sem_rel (Cs2) S)" by auto
+  from map_add_com conj_ext_main H1 assms(3,5) have "Q1 (sem_rel (Cs1 ++ Cs2) S)" by metis
+  moreover from conj_ext_main H2 assms(4,5) have "Q2 (sem_rel (Cs1 ++ Cs2) S)" by metis  
+  ultimately show "conj Q1 Q2 (sem_rel (Cs1 ++ Cs2) S)" unfolding conj_def by auto
 qed
 
 
 definition wp_RHHL :: "'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> 'a rel_hyper_assertion" where
-"wp_RHHL Cs Q = (\<lambda>S. (Q (sem_lifted Cs S)))"
+"wp_RHHL Cs Q = (\<lambda>S. (Q (sem_rel Cs S)))"
 
 
 lemma wp_RHHL_E: 
   assumes "wp_RHHL Cs Q S"
-  shows "(Q (sem_lifted Cs S))"
+  shows "(Q (sem_rel Cs S))"
   using assms unfolding wp_RHHL_def
   by simp
 
 lemma wp_RHHL_I: 
-  assumes "(Q (sem_lifted Cs S))"
+  assumes "(Q (sem_rel Cs S))"
   shows "wp_RHHL Cs Q S"
   using assms unfolding wp_RHHL_def
   by simp
@@ -5960,11 +5862,11 @@ proof
   proof (rule relational_hyper_hoare_tripleI)
     fix S
     assume "P S"
-    with assms(1) have "Q (sem_lifted (Cs ++ Cs') S)"
+    with assms(1) have "Q (sem_rel (Cs ++ Cs') S)"
       by (simp add: relational_hyper_hoare_triple_def)
-    with assms(2) sem_lifted_on_disjoint_maps_seq have "Q (sem_lifted Cs' (sem_lifted Cs S))" 
+    with assms(2) sem_lifted_on_disjoint_maps_seq have "Q (sem_rel Cs' (sem_rel Cs S))" 
       by metis
-    thus "wp_RHHL Cs' Q (sem_lifted Cs S)"
+    thus "wp_RHHL Cs' Q (sem_rel Cs S)"
       by (simp add: wp_RHHL_I)
   qed
 next
@@ -5989,11 +5891,11 @@ definition project_out :: "nat set \<Rightarrow> 'a rel_hyper_assertion \<Righta
 
 lemma proj_rule_main:
   assumes "dom Cs \<inter> dom Cs' = {}"
-  shows "(sem_lifted (Cs ++ Cs') (override_on S SCs (dom Cs))) = (override_on (sem_lifted Cs' S) (sem_lifted Cs SCs) (dom Cs))"
+  shows "(sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs))) = (override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs))"
 proof
   fix i 
-  show "sem_lifted (Cs ++ Cs') (override_on S SCs (dom Cs)) i = override_on (sem_lifted Cs' S) (sem_lifted Cs SCs) (dom Cs) i"
-    by (metis (mono_tags, lifting) assms map_add_comm map_add_dom_app_simps(1,3) override_on_def sem_lifted_def)
+  show "sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs)) i = override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs) i"
+    by (metis (mono_tags, lifting) assms map_add_comm map_add_dom_app_simps(1,3) override_on_def sem_rel_def)
 qed
 
 text\<open>The generalized version of wp-proj\<close>
@@ -6006,11 +5908,11 @@ proof (rule relational_hyper_hoare_tripleI)
   assume "project_out (dom Cs) P S"
   from this obtain SCs where " P (override_on S SCs (dom Cs))"
     using project_out_def by blast
-  with assms(1) have "Q (sem_lifted (Cs ++ Cs') (override_on S SCs (dom Cs)))"
+  with assms(1) have "Q (sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs)))"
     by (simp add: relational_hyper_hoare_tripleE)
-  with proj_rule_main assms(2) have "(Q (override_on (sem_lifted Cs' S) (sem_lifted Cs SCs) (dom Cs)))" 
+  with proj_rule_main assms(2) have "(Q (override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs)))" 
     by metis
-  thus "project_out (dom Cs) Q (sem_lifted Cs' S)" 
+  thus "project_out (dom Cs) Q (sem_rel Cs' S)" 
     using project_out_def by auto
 qed
 
@@ -6054,13 +5956,13 @@ proof (rule relational_hyper_hoare_tripleI)
   assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
   hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
     by (simp add: reindex_assertion_def)
-  with assms(1) have "Q (sem_lifted Cs (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  with assms(1) have "Q (sem_rel Cs (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
     by (simp add: relational_hyper_hoare_tripleE)
-  with assms(2) reindex_pass_main have "Q (sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))" 
+  with assms(2) reindex_pass_main have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))" 
     by metis
-  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_lifted Cs S))"
+  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_rel Cs S))"
     by (simp add: sem_lifted_reindex)
-  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_lifted Cs S)" 
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel Cs S)" 
     by (simp add: reindex_assertion_def)
 qed
 
@@ -6092,13 +5994,13 @@ proof (rule relational_hyper_hoare_tripleI)
   assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
   hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
     by (simp add: reindex_assertion_def)
-  with assms(1) have "Q (sem_lifted ([i \<mapsto> C, j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  with assms(1) have "Q (sem_rel ([i \<mapsto> C, j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
     using relational_hyper_hoare_tripleE by blast
-  with reindex_merge_main assms(1) have "Q (sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  with reindex_merge_main assms(1) have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
     by metis
-  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_lifted ([i \<mapsto> C] ++ Cs' ) S))"
+  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_rel ([i \<mapsto> C] ++ Cs' ) S))"
     by (simp add: sem_lifted_reindex)
-  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_lifted ([i \<mapsto> C] ++ Cs') S)" 
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel ([i \<mapsto> C] ++ Cs') S)" 
     by (simp add: reindex_assertion_def)
 qed
 
@@ -6127,24 +6029,24 @@ qed
 lemma reindex_swap_main2:
   assumes "\<forall>i' \<noteq> i. Cs1 i' = Cs2 i'"
       and "i \<notin> idx Q"
-  shows "Q (sem_lifted Cs1 S) = Q (sem_lifted Cs2 S)"
+  shows "Q (sem_rel Cs1 S) = Q (sem_rel Cs2 S)"
 proof -
-  have "(sem_lifted Cs2 S) = (sem_lifted Cs1 S)(i := (sem_lifted Cs2 S) i)"
+  have "(sem_rel Cs2 S) = (sem_rel Cs1 S)(i := (sem_rel Cs2 S) i)"
   proof
     fix j
     have "j = i \<or> j \<noteq> i" by auto
-    thus "(sem_lifted Cs2 S) j = ((sem_lifted Cs1 S)(i := (sem_lifted Cs2 S) i)) j"
+    thus "(sem_rel Cs2 S) j = ((sem_rel Cs1 S)(i := (sem_rel Cs2 S) i)) j"
     proof
       assume "j = i"
-      thus "sem_lifted Cs2 S j = ((sem_lifted Cs1 S)(i := sem_lifted Cs2 S i)) j"
+      thus "sem_rel Cs2 S j = ((sem_rel Cs1 S)(i := sem_rel Cs2 S i)) j"
         by simp
     next 
       assume "j \<noteq> i" 
-      with assms(1) show "sem_lifted Cs2 S j = ((sem_lifted Cs1 S)(i := sem_lifted Cs2 S i)) j"
-        by (simp add: sem_lifted_def)
+      with assms(1) show "sem_rel Cs2 S j = ((sem_rel Cs1 S)(i := sem_rel Cs2 S i)) j"
+        by (simp add: sem_rel_def)
     qed
   qed
-  with assms(2) show "Q (sem_lifted Cs1 S) = Q (sem_lifted Cs2 S)" unfolding idx_def
+  with assms(2) show "Q (sem_rel Cs1 S) = Q (sem_rel Cs2 S)" unfolding idx_def
     by (metis (mono_tags, lifting) UNIV_I mem_Collect_eq set_diff_eq)
 qed
 
@@ -6159,14 +6061,14 @@ proof (rule relational_hyper_hoare_tripleI)
   assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
   hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
     by (simp add: reindex_assertion_def)
-  with assms(1) have "Q (sem_lifted ([j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  with assms(1) have "Q (sem_rel ([j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
     using relational_hyper_hoare_tripleE by blast
   with assms reindex_swap_main reindex_swap_main2 
-    have "Q (sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+    have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
       by (smt (verit, ccfv_SIG))
-  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_lifted ([i \<mapsto> C] ++ Cs' ) S))"
+  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_rel ([i \<mapsto> C] ++ Cs' ) S))"
     by (simp add: sem_lifted_reindex)
-  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_lifted ([i \<mapsto> C] ++ Cs') S)" 
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel ([i \<mapsto> C] ++ Cs') S)" 
     by (simp add: reindex_assertion_def)
 qed
 
@@ -6176,21 +6078,21 @@ qed
 
 lemma reindex_post_main:
   assumes "j \<notin> (dom Cs)"
-  shows "let S' = (sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S) in 
-        (sem_lifted Cs (S(j := S' j))) = S'"
+  shows "let S' = (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S) in 
+        (sem_rel Cs (S(j := S' j))) = S'"
   unfolding Let_def
 proof
-  let ?S' = "(sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S)"
+  let ?S' = "(sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S)"
   fix i'
   have "i' = j \<or> i' \<noteq> j" by auto
-  thus "sem_lifted Cs (S(j := ?S' j)) i' = ?S' i'"
+  thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'"
   proof
     assume "i' = j"
-    thus "sem_lifted Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_lifted_def
+    thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_rel_def
       using assms by fastforce
   next 
     assume "i' \<noteq> j"
-    thus "sem_lifted Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_lifted_def
+    thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_rel_def
       by (simp add: reindex_hyper_stuff_def)
   qed
 qed
@@ -6205,7 +6107,7 @@ theorem reindex_post:
     shows "\<Turnstile> { P } [ Cs ] { reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q }"
 proof (rule relational_hyper_hoare_tripleI)
   fix S
-  let ?S' = "(sem_lifted (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  let ?S' = "(sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
   assume "P S"
   have "(reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S) = S(j:=(S i))" unfolding reindex_hyper_stuff_def
     by fastforce
@@ -6213,13 +6115,13 @@ proof (rule relational_hyper_hoare_tripleI)
     using idxE by force
   with assms(2) have "P ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j))"
     using idxE by blast
-  with assms(1) have H: "Q (sem_lifted Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j)))"
+  with assms(1) have H: "Q (sem_rel Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j)))"
     by (simp add: relational_hyper_hoare_tripleE)
-  from assms(2) have "(sem_lifted Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j))) j = ?S' j" unfolding sem_lifted_def by force
+  from assms(2) have "(sem_rel Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j))) j = ?S' j" unfolding sem_rel_def by force
   from reindex_post_main assms(2) H have "Q ?S'" by metis
-  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_lifted Cs S))"
+  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_rel Cs S))"
     by (simp add: sem_lifted_reindex)
-  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_lifted Cs S)" 
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel Cs S)" 
     by (simp add: reindex_assertion_def)
 qed
 
@@ -6227,26 +6129,6 @@ qed
 
 subsection \<open>Lockstep rules\<close>
 
-
-abbreviation assign_hyper_set where
-"assign_hyper_set I Xs Es S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := (Es i) \<sigma>)) |l \<sigma>. (l, \<sigma>) \<in> (S i) } else S i))"
-
-abbreviation assign_prec where
-"assign_prec P I Xs Es S \<equiv> P (assign_hyper_set I Xs Es S)"
-
-theorem assign_lockstep:
-  shows "\<Turnstile>  { assign_prec P I Xs Es} [[i \<mapsto> Assign (Xs i) (Es i) |i \<in> I]] {P}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S
-  assume asm: "assign_prec P I Xs Es S"
-  have "assign_hyper_set I Xs Es S = (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)"
-  proof
-    fix i
-    show "assign_hyper_set I Xs Es S i = (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S) i"
-      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemAssign)
-  qed
-  with asm show "P (sem_lifted [i \<mapsto> Assign (Xs i) (Es i) |i \<in> I] S)" by auto
-qed
 
 text\<open>The generalized version of the right-to-left direction of wp-seqI\<close>
 theorem seq_split_rule:
@@ -6257,11 +6139,11 @@ proof
   proof (rule relational_hyper_hoare_tripleI)
     fix S
     assume "P S"
-    with assms(1) have "Q (sem_lifted (hyper_seq Cs Cs') S)"
+    with assms(1) have "Q (sem_rel (hyper_seq Cs Cs') S)"
       by (simp add: relational_hyper_hoare_triple_def)
-    hence "Q (sem_lifted Cs' (sem_lifted Cs S))" 
+    hence "Q (sem_rel Cs' (sem_rel Cs S))" 
       by (simp add: sem_lifted_hyper_seq)
-    thus "wp_RHHL Cs' Q (sem_lifted Cs S)"
+    thus "wp_RHHL Cs' Q (sem_rel Cs S)"
       by (simp add: wp_RHHL_I)
   qed
 next
@@ -6273,14 +6155,14 @@ qed
 text\<open>Refinement relation between two hyper-programs. Satisfied if all corresponding programs
       are in the refinement relation.\<close>
 definition refines_hyper_program :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> bool"where
-"refines_hyper_program Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_lifted Cs1 S) i \<subseteq> (sem_lifted Cs2 S) i))"
+"refines_hyper_program Cs1 Cs2  = (\<forall>S. (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
 
 lemma ref_equiv: "sem_equiv_hyper Cs1 Cs2 \<longleftrightarrow> (refines_hyper_program Cs1 Cs2) \<and> (refines_hyper_program Cs2 Cs1)"
   unfolding sem_equiv_hyper_def refines_hyper_program_def
   by fastforce
 
 definition refines_hyper_program_cond :: "'a hyper_program \<Rightarrow> 'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> bool"where
-"refines_hyper_program_cond Cs1 Cs2 P  = (\<forall>S. (P S) \<longrightarrow> (\<forall>i. (sem_lifted Cs1 S) i \<subseteq> (sem_lifted Cs2 S) i))"
+"refines_hyper_program_cond Cs1 Cs2 P  = (\<forall>S. (P S) \<longrightarrow> (\<forall>i. (sem_rel Cs1 S) i \<subseteq> (sem_rel Cs2 S) i))"
 
 lemma ref_equiv_cond: "sem_equiv_hyper_cond Cs1 Cs2 P \<longleftrightarrow> (refines_hyper_program_cond Cs1 Cs2 P) \<and> (refines_hyper_program_cond Cs2 Cs1 P)"
   unfolding sem_equiv_hyper_cond_def refines_hyper_program_cond_def
@@ -6301,10 +6183,10 @@ fun no_exists_state :: "'a syn_assertion \<Rightarrow> bool" where
 lemma meta_refinement_rule_main:
   assumes "refines_hyper_program Cs1 Cs2"
       and "no_exists_state Q"
-      and "sat_assertion vals states Q (sem_lifted Cs2 S)"
-    shows "sat_assertion vals states Q (sem_lifted Cs1 S)"
+      and "sat_assertion vals states Q (sem_rel Cs2 S)"
+    shows "sat_assertion vals states Q (sem_rel Cs1 S)"
 proof -
-  from assms(2) assms(3) show "sat_assertion vals states Q (sem_lifted Cs1 S)"
+  from assms(2) assms(3) show "sat_assertion vals states Q (sem_rel Cs1 S)"
   proof (induction Q arbitrary:vals states)
     case (AConst x)
     then show ?case by simp
@@ -6345,9 +6227,9 @@ theorem meta_refinement_rule:
 proof (rule relational_hyper_hoare_tripleI)
   fix S
   assume "P S"
-  with assms(2) have "interp_assert Q (sem_lifted Cs2 S)"
+  with assms(2) have "interp_assert Q (sem_rel Cs2 S)"
     by (simp add: relational_hyper_hoare_tripleE)
-  with assms(1) assms(3) meta_refinement_rule_main show "interp_assert Q (sem_lifted Cs1 S)" by blast
+  with assms(1) assms(3) meta_refinement_rule_main show "interp_assert Q (sem_rel Cs1 S)" by blast
 qed
 
 
@@ -6365,10 +6247,10 @@ proof (intro allI ballI)
   fix i
   let ?Ss' = "(\<lambda>i. if i = 0 then (Ss 0) else (if i = 1 then (Ss 0) else {}))" 
   have "(ref_cond 0 1) ?Ss'" unfolding ref_cond_def by auto
-  with assms have "(ref_cond 0 1) (sem_lifted [0 \<mapsto> C1, 1 \<mapsto> C2] ?Ss')"
+  with assms have "(ref_cond 0 1) (sem_rel [0 \<mapsto> C1, 1 \<mapsto> C2] ?Ss')"
     by (simp add: relational_hyper_hoare_triple_def ref_cond_def)
-  from this show "sem_lifted [0 \<mapsto> C1] Ss i \<subseteq> sem_lifted [0 \<mapsto> C2] Ss i" unfolding ref_cond_def 
-    by(auto simp add:sem_lifted_def)
+  from this show "sem_rel [0 \<mapsto> C1] Ss i \<subseteq> sem_rel [0 \<mapsto> C2] Ss i" unfolding ref_cond_def 
+    by(auto simp add:sem_rel_def)
 qed
 
 
@@ -6386,26 +6268,7 @@ proof -
 qed
 
 
-text\<open>Program statement which uses only syntactic program expressions and program boolean expressions.\<close>
-datatype 'a syn_stmt = 
-  AssignS var "'a pexp"
-  | SeqS "'a syn_stmt" "'a syn_stmt"                   
-  | IfS "'a syn_stmt" "'a syn_stmt"                    
-  | SkipS
-  | HavocS var                                                
-  | AssumeS "'a pbexp"
-  | WhileS "'a syn_stmt"                                   
 
-
-
-fun interp_syn_stmt :: "'a syn_stmt \<Rightarrow> (var, 'a) stmt" where
-"interp_syn_stmt (AssignS v pe) = (Assign v (interp_pexp pe))" |
-"interp_syn_stmt (SeqS C1 C2) = (Seq (interp_syn_stmt C1) (interp_syn_stmt C2))" |
-"interp_syn_stmt (IfS C1 C2) = (If (interp_syn_stmt C1) (interp_syn_stmt C2))" |
-"interp_syn_stmt (SkipS) = Skip" |
-"interp_syn_stmt (HavocS v) = (Havoc v)" |
-"interp_syn_stmt (AssumeS pb) = (Assume (interp_pbexp pb))" |
-"interp_syn_stmt (WhileS C) = (interp_syn_stmt C)"
 
 
 fun pexp_var :: "'a pexp \<Rightarrow> nat list" where
@@ -6509,7 +6372,7 @@ proof (intro allI impI)
 
   let ?S = "\<lambda>i. (if i = 0 then {(\<sigma>,\<sigma>)} else (if i = 1 then {(\<sigma>,\<sigma>)} else {}))"
   have "(refinement_assert 0 1 C1 C2) ?S" unfolding refinement_assert_def by(auto)
-  with assms have H: "(refinement_assert 0 1 C1 C2) (sem_lifted [0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)] ?S)"
+  with assms have H: "(refinement_assert 0 1 C1 C2) (sem_rel [0 \<mapsto> (interp_syn_stmt C1), 1 \<mapsto> (interp_syn_stmt C2)] ?S)"
     using relational_hyper_hoare_tripleE by blast
   from variable_preservation have "\<And>\<phi> \<phi>'. (\<langle>interp_syn_stmt C1, \<sigma>\<rangle> \<rightarrow> \<phi>) \<and> (\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<phi>') \<and> (\<forall>x\<in>set (pvar C1) \<union> set (pvar C2). \<phi> x = \<phi>' x) \<Longrightarrow> \<phi> = \<phi>'"
     apply(auto)
@@ -6525,7 +6388,7 @@ proof (intro allI impI)
     then show "\<phi> = \<phi>'"
       using f3 by fastforce
   qed
-  with H asm show "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by(auto simp add:refinement_assert_def sem_lifted_def sem_def)
+  with H asm show "\<langle>interp_syn_stmt C2, \<sigma>\<rangle> \<rightarrow> \<sigma>'" by(auto simp add:refinement_assert_def sem_rel_def sem_def)
 qed
 
 
@@ -6535,8 +6398,8 @@ lemma refines_program_lifted:
   unfolding refines_hyper_program_def 
 proof (intro allI)
   fix S i 
-  from assms show "sem_lifted [0 \<mapsto> C1] S i \<subseteq> sem_lifted [0 \<mapsto> C2] S i" unfolding refines_program_def
-    apply(auto simp add:sem_lifted_def sem_def)
+  from assms show "sem_rel [0 \<mapsto> C1] S i \<subseteq> sem_rel [0 \<mapsto> C2] S i" unfolding refines_program_def
+    apply(auto simp add:sem_rel_def sem_def)
     by auto
 qed
 
@@ -6601,11 +6464,11 @@ proof (rule relational_hyper_hoare_tripleI)
   fix S
   assume "reindex_assertion \<pi> P S"
   hence "P (reindex_hyper_stuff \<pi> S)" unfolding reindex_assertion_def by auto
-  with assms(1) have "Q (sem_lifted Cs (reindex_hyper_stuff \<pi> S))" unfolding relational_hyper_hoare_triple_def
+  with assms(1) have "Q (sem_rel Cs (reindex_hyper_stuff \<pi> S))" unfolding relational_hyper_hoare_triple_def
     by auto
-  with sem_lifted_reindex reindex_inv_org \<open>bij \<pi>\<close> have "Q (reindex_hyper_stuff \<pi> (sem_lifted (reindex_hyper_stuff (inv \<pi>) Cs) S))"
+  with sem_lifted_reindex reindex_inv_org \<open>bij \<pi>\<close> have "Q (reindex_hyper_stuff \<pi> (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S))"
     by metis
-  then show "reindex_assertion \<pi> Q (sem_lifted (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
+  then show "reindex_assertion \<pi> Q (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
 qed
 
 
@@ -6684,8 +6547,8 @@ proof (intro relational_hyper_hoare_tripleI)
   fix S
   assume asm:"sequential_prec P S"
   let ?S' = "sequential_prec_hyper_set S"
-  let ?postS_par = "(sem_lifted ([0 \<mapsto> C0, 1 \<mapsto> (interp_syn_stmt C1)] ++ Cs') ?S')"
-  let ?postS_seq = "(sem_lifted ([0 \<mapsto> C0 ;; interp_syn_stmt C1] ++ Cs') S)"
+  let ?postS_par = "(sem_rel ([0 \<mapsto> C0, 1 \<mapsto> (interp_syn_stmt C1)] ++ Cs') ?S')"
+  let ?postS_seq = "(sem_rel ([0 \<mapsto> C0 ;; interp_syn_stmt C1] ++ Cs') S)"
   let ?mods = "(written_vars (interp_syn_stmt C1))"
   from asm have "P ?S'" by(auto)
   with assms(1) have H1: "(parallel_post Q (written_vars (interp_syn_stmt C1))) ?postS_par"
@@ -6699,82 +6562,24 @@ proof (intro relational_hyper_hoare_tripleI)
       assume "i > 1"
       thus "?postS_seq i = parallel_post_hyper_set ?postS_par ?mods i"
         using assms(3)
-        by(auto simp add:sem_lifted_def fun_upd_def map_add_def)
+        by(auto simp add:sem_rel_def fun_upd_def map_add_def)
     next
       assume "i=0"
       thus "?postS_seq i = parallel_post_hyper_set ?postS_par ?mods i"
         using assms(3)
-        apply(auto simp add:sem_lifted_def fun_upd_def map_add_def)
+        apply(auto simp add:sem_rel_def fun_upd_def map_add_def)
        
   with H1 show "Q ?postS_seq" by simp
 qed
 
 *)
 
-abbreviation assume_hyper_set where
-"assume_hyper_set I Bs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>) |l \<sigma>. (l, \<sigma>) \<in> (S i) \<and> (Bs i) \<sigma>} else S i))"
-
-abbreviation assume_prec where
-"assume_prec P I Bs S \<equiv> P (assume_hyper_set I Bs S)"
-
-theorem assume_lockstep:
-  shows "\<Turnstile>  { assume_prec P I Bs} [[i \<mapsto> Assume (Bs i) |i \<in> I]] {P}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S
-  assume asm: "assume_prec P I Bs S"
-  have "(assume_hyper_set I Bs S) = (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S)"
-  proof
-    fix i
-    show "(assume_hyper_set I Bs S) i = (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S) i"
-      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemAssume)
-  qed
-  with asm show "P (sem_lifted [i \<mapsto> Assume (Bs i) |i \<in> I] S)" by auto
-qed
-
-abbreviation havoc_hyper_set where
-"havoc_hyper_set I Xs S \<equiv> (\<lambda>i. (if i \<in> I then { (l, \<sigma>((Xs i) := v)) |l \<sigma> v. (l, \<sigma>) \<in> (S i) } else S i))"
-
-abbreviation havoc_prec where
-"havoc_prec P I Xs S \<equiv> P (havoc_hyper_set I Xs S)"
-
-theorem havoc_lockstep:
-  shows "\<Turnstile>  { havoc_prec P I Xs } [[i \<mapsto> Havoc (Xs i) |i \<in> I]] {P}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S
-  assume asm: "havoc_prec P I Xs S"
-  have "havoc_hyper_set I Xs S = (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S)"
-  proof
-    fix i
-    show "havoc_hyper_set I Xs S i = (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S) i"
-      by(auto simp add:sem_lifted_def map_comprehension_def sem_def intro:SemHavoc)
-  qed
-  with asm show "P (sem_lifted [i \<mapsto> Havoc (Xs i) |i \<in> I] S)" by auto
-qed
-
-theorem false:
-  shows "\<Turnstile> {(\<lambda>S. False)} [Cs] {Q}"
-proof (intro relational_hyper_hoare_tripleI)
-  fix S
-  assume "False"
-  thus "Q (sem_lifted Cs S)" by auto
-qed
-
-theorem true:
-  shows "\<Turnstile> {P} [Cs] {(\<lambda>S. True)}"
-  by (simp add: relational_hyper_hoare_tripleI)
 
 
-theorem skip_lockstep:
-  shows "\<Turnstile> {P} [[i \<mapsto> Skip |i \<in> I]] {P}"
-proof (rule relational_hyper_hoare_tripleI)
-  fix S
-  assume "P S"
-  have eq:"(sem_lifted (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S) = S"
-    apply(rule) using SemSkip
-    by(auto simp add:sem_lifted_def map_comprehension_def sem_def)
-  show "P (sem_lifted (map_comprehension (\<lambda>i. Skip) (\<lambda>i. i \<in> I)) S)"
-    apply(simp only:eq) using \<open>P S\<close> by auto
-qed
+
+
+
+
 
 theorem conj_rule:
   assumes "\<Turnstile> {P1} [Cs] {Q1}"
@@ -6783,11 +6588,11 @@ theorem conj_rule:
 proof (intro relational_hyper_hoare_tripleI)
   fix S
   assume "(conj P1 P2) S"
-  from \<open>(conj P1 P2) S\<close> assms(1) have H1:"Q1 (sem_lifted Cs S)"
+  from \<open>(conj P1 P2) S\<close> assms(1) have H1:"Q1 (sem_rel Cs S)"
     by (simp add: relational_hyper_hoare_tripleE conj_def)
-  from \<open>(conj P1 P2) S\<close> assms(2) have H2:"Q2 (sem_lifted Cs S)"
+  from \<open>(conj P1 P2) S\<close> assms(2) have H2:"Q2 (sem_rel Cs S)"
     by (simp add: relational_hyper_hoare_tripleE conj_def)
-  show "conj Q1 Q2 (sem_lifted Cs S)"
+  show "conj Q1 Q2 (sem_rel Cs S)"
     by(auto simp add:conj_def H1 H2)
 qed
 
@@ -6798,9 +6603,9 @@ theorem disj_rule:
 proof (intro relational_hyper_hoare_tripleI)
   fix S
   assume "disj P1 P2 S"
-  with assms have "Q1 (sem_lifted Cs S) \<or> Q2 (sem_lifted Cs S)"
+  with assms have "Q1 (sem_rel Cs S) \<or> Q2 (sem_rel Cs S)"
     unfolding disj_def relational_hyper_hoare_triple_def by auto
-  thus "disj Q1 Q2 (sem_lifted Cs S)" unfolding disj_def by auto
+  thus "disj Q1 Q2 (sem_rel Cs S)" unfolding disj_def by auto
 qed
 
 
@@ -6829,7 +6634,7 @@ proof -
   have H10:"\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs'] { (holds_forall_hyper I bs) }" 
     apply(intro relational_hyper_hoare_tripleI)
     using assms(2)
-    apply(auto simp add:sem_lifted_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
+    apply(auto simp add:sem_rel_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
     by (metis (mono_tags, lifting) IntI assms(2) domIff empty_iff map_comprehension_def option.discI partial_sem.simps(2)
         snd_eqD)
   have H: "\<Turnstile> { conj P (holds_forall_hyper I bs) } [Cs'] { conj (wp_RHHL [i \<mapsto> (Cs1 i) | i \<in> I] Q) (holds_forall_hyper I bs) }" 
@@ -6865,7 +6670,7 @@ proof -
   have H10:"\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs'] { (holds_forall_hyper I (lnot_hyper bs)) }" 
     apply(intro relational_hyper_hoare_tripleI)
     using assms(2)
-    apply(auto simp add:sem_lifted_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
+    apply(auto simp add:sem_rel_def conj_def holds_forall_hyper_def dom_def map_comprehension_def)
     by (metis (mono_tags, lifting) IntI assms(2) domIff empty_iff map_comprehension_def option.discI partial_sem.simps(2)
         snd_eqD)
   have H: "\<Turnstile> { conj P (holds_forall_hyper I (lnot_hyper bs)) } [Cs'] { conj (wp_RHHL [i \<mapsto> (Cs2 i) | i \<in> I] Q) (holds_forall_hyper I (lnot_hyper bs)) }" 
@@ -6904,12 +6709,12 @@ proof -
   proof (intro ballI allI impI)
     fix S
     assume asm1:"\<forall>S. Logic.conj P (holds_forall_hyper I bs) S \<longrightarrow>
-              Q (sem_lifted (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
+              Q (sem_rel (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
           asm2:"\<forall>S. Logic.conj P (holds_forall_hyper I (lnot_hyper bs)) S \<longrightarrow>
-              Q (sem_lifted (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
+              Q (sem_rel (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)" and
           asm3:"Logic.conj P (low_exp_hyper I bs) S"
     hence "conj P (holds_forall_hyper I bs) S \<or> conj P (holds_forall_hyper I (lnot_hyper bs)) S" using low_exp_either conj_def by metis
-    thus "Q (sem_lifted (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)"
+    thus "Q (sem_rel (Cs' ++ map_comprehension (\<lambda>i. if_then_else (bs i) (Cs1 i) (Cs2 i)) (\<lambda>i. i \<in> I)) S)"
     proof
       assume "Logic.conj P (holds_forall_hyper I bs) S"
       with asm1 show ?thesis by auto
@@ -6929,12 +6734,12 @@ lemma sem_equiv_hyper_cond_extend:
 proof(auto simp add:sem_equiv_hyper_cond_def)
   fix S
   assume "P S"
-  show "sem_lifted (Cs' ++ Cs1) S = sem_lifted (Cs' ++ Cs2) S "
+  show "sem_rel (Cs' ++ Cs1) S = sem_rel (Cs' ++ Cs2) S "
     apply(rule)
     using assms
-    apply(auto simp add:sem_lifted_def map_add_def sem_equiv_hyper_cond_def dom_def)
-     apply (metis \<open>P S\<close> assms(2,3) inf_commute map_add_comm map_add_def sem_lifted_def sem_lifted_on_disjoint_maps_seq)
-    by (metis \<open>P S\<close> assms(2,3) inf_commute map_add_comm map_add_def sem_lifted_def sem_lifted_on_disjoint_maps_seq)
+    apply(auto simp add:sem_rel_def map_add_def sem_equiv_hyper_cond_def dom_def)
+     apply (metis \<open>P S\<close> assms(2,3) inf_commute map_add_comm map_add_def sem_rel_def sem_lifted_on_disjoint_maps_seq)
+    by (metis \<open>P S\<close> assms(2,3) inf_commute map_add_comm map_add_def sem_rel_def sem_lifted_on_disjoint_maps_seq)
 qed
 
 theorem if_lockstep_arbitraryG:
@@ -6972,36 +6777,6 @@ qed
 
 
 
-lemma seq_associativity_main:
-  shows "sem_lifted (Cs1;;\<^sub>HCs2;;\<^sub>HCs3) S = sem_lifted ((Cs1;;\<^sub>HCs2);;\<^sub>HCs3) S"
-proof 
-  fix i
-  show "sem_lifted (Cs1 ;;\<^sub>H Cs2 ;;\<^sub>H Cs3) S i = sem_lifted ((Cs1 ;;\<^sub>H Cs2) ;;\<^sub>H Cs3) S i"
-    apply(auto simp add:sem_lifted_def hyper_seq_def)
-     apply(cases "Cs1 i")
-      apply(auto)
-     apply(cases "Cs2 i")
-      apply(auto)
-     apply(cases "Cs3 i")
-      apply(auto simp add:sem_def)
-    using SemSeq apply blast
-     apply(cases "Cs1 i")
-      apply(auto)
-     apply(cases "Cs2 i")
-      apply(auto)
-     apply(cases "Cs3 i")
-      apply(auto simp add:sem_def)
-    using SemSeq apply blast
-    done
-qed
-  
-
-text\<open>A very technical rule for reassociating\<close>
-theorem seq_associativity:
-  shows "\<Turnstile> {P} [Cs1;;\<^sub>HCs2;;\<^sub>HCs3] {Q} = \<Turnstile> {P} [(Cs1;;\<^sub>HCs2);;\<^sub>HCs3] {Q} "
-  unfolding relational_hyper_hoare_triple_def
-  by(simp only: seq_associativity_main)
-
 
 section \<open>Mini case study\<close>
 
@@ -7009,9 +6784,7 @@ section \<open>Mini case study\<close>
 
 
 
-notation if_then_else  ("IF _ THEN _ ELSE _" [0, 0, 61] 61)
-notation if_then_else_skip  ("IF _  THEN _ FI" [0, 60] 61)
-notation while_cond  ("WHILE _ DO _" [0, 61] 61)
+
 
 
 abbreviation four_to_hundred :: "nat \<Rightarrow> nat \<Rightarrow> (nat, nat) stmt" where

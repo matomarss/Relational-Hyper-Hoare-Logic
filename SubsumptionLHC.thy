@@ -1008,9 +1008,9 @@ proof(intro impI ballI allI iffI)
   from this obtain S' where S_eq:"(S = hyper_pre_state_translation Cs S')" and "(P S')" unfolding equiv_prec_wrtt_def by blast
   with asm1 have  "wp Cs Q S'" by auto
   hence asm1_unf:"(\<forall>S'' V. \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle> \<longrightarrow> Q V S'')" unfolding wp_def by auto
-  let ?S' = "(sem_lifted (hyper_program_translation Cs) (hyper_pre_state_translation Cs S'))"
+  let ?S' = "(sem_rel (hyper_program_translation Cs) (hyper_pre_state_translation Cs S'))"
   from trm_translation_sem_equiv have "\<forall>S'''\<in>(post_state_combinations (?S')). (let V = hyper_post_state_translation_inv1 S''' Cs in let S'' = hyper_post_state_translation_inv2 Cs S''' in S''' = hyper_post_state_translation Cs V S'' \<and> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
-    apply(auto simp add: post_state_combinations_def hyper_program_translation_def hyper_pre_state_translation_def hyper_post_state_translation_inv2_def hyper_post_state_translation_def big_sem_hyper_def dom_def sem_lifted_def sem_def Let_def split:option.splits)
+    apply(auto simp add: post_state_combinations_def hyper_program_translation_def hyper_pre_state_translation_def hyper_post_state_translation_inv2_def hyper_post_state_translation_def big_sem_hyper_def dom_def sem_rel_def sem_def Let_def split:option.splits)
        apply(rule ext)
        apply(auto split:option.splits simp add:hyper_trans_inv_none)
       apply(rule ext)
@@ -1064,17 +1064,17 @@ proof(intro impI ballI allI iffI)
   qed
   with hyper_post_state_translation_inj cs_v_dom_eq have "\<forall>S'''\<in>(post_state_combinations (?S')). (\<forall>V S''. dom (map_of V) = dom (map_of Cs) \<and> S''' = hyper_post_state_translation Cs V S'' \<longrightarrow> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
     by (smt (verit, ccfv_SIG) big_sem_hyper_def)
-  with asm1_unf S_eq show " equiv_post_wrtt Q Cs (sem_lifted (hyper_program_translation Cs) S)" unfolding equiv_post_wrtt_def by blast
+  with asm1_unf S_eq show " equiv_post_wrtt Q Cs (sem_rel (hyper_program_translation Cs) S)" unfolding equiv_post_wrtt_def by blast
 next
   fix S
-  assume asm1: "\<forall>S. equiv_prec_wrtt P Cs S \<longrightarrow> equiv_post_wrtt Q Cs (sem_lifted (hyper_program_translation Cs) S)"
+  assume asm1: "\<forall>S. equiv_prec_wrtt P Cs S \<longrightarrow> equiv_post_wrtt Q Cs (sem_rel (hyper_program_translation Cs) S)"
   assume asm2: "P S"
   let ?S' = "hyper_pre_state_translation Cs S"
   from asm2 have asm2_fact: "equiv_prec_wrtt P Cs ?S'" using equiv_prec_wrtt_def by auto
-  let ?S'' = "(sem_lifted (hyper_program_translation Cs) ?S')"
+  let ?S'' = "(sem_rel (hyper_program_translation Cs) ?S')"
   from asm2_fact asm1 have "equiv_post_wrtt Q Cs ?S''" unfolding equiv_post_wrtt_def by auto
   moreover from trm_translation_sem_equiv have "\<forall>S' V. \<langle>Cs, S\<rangle> \<Down> \<langle>V, S'\<rangle> \<longrightarrow> (hyper_post_state_translation Cs V S')\<in>(post_state_combinations ?S'')" 
-    apply(auto simp add: big_sem_hyper_def hyper_post_state_translation_def post_state_combinations_def sem_lifted_def hyper_program_translation_def hyper_pre_state_translation_def sem_def split:option.splits)
+    apply(auto simp add: big_sem_hyper_def hyper_post_state_translation_def post_state_combinations_def sem_rel_def hyper_program_translation_def hyper_pre_state_translation_def sem_def split:option.splits)
     apply (simp add: domIff)
     apply (meson domI domIff)
     done
