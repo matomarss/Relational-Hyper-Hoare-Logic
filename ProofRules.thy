@@ -2758,7 +2758,7 @@ lemma relational_upwards_closedI:
   shows "relational_upwards_closed I P P_inf"
   by (simp add: assms relational_upwards_closed_def)
 
-lemma upwards_closedE:
+lemma relational_upwards_closedE:
   assumes "relational_upwards_closed I P P_inf"
       and "hyper_ascending I S"
       and "\<And>n. P n (S n)"
