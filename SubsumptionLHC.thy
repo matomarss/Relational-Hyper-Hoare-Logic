@@ -1094,4 +1094,473 @@ qed
 
 
 
+
+
+
+
+
+
+
+
+section \<open>LHC's subsumed rules\<close>
+
+subsection \<open>Hyper-structure rules\<close>
+
+text\<open>definition of relevant indices of a hyper-assertion adapted from LHC\<close>
+definition idx :: "'a rel_hyper_assertion \<Rightarrow> nat set" where
+"idx P = UNIV - {(i::nat). (\<forall>Ss S. (P Ss) \<longleftrightarrow> (P (Ss(i := S))))}"
+
+
+lemma idxE: "\<And>i. (i \<notin> idx P) \<Longrightarrow> (\<forall>Ss S. (P Ss) \<longleftrightarrow> (P (Ss(i := S))))"
+  unfolding idx_def
+  by simp
+
+
+definition irl_idcs :: "'a rel_hyper_assertion \<Rightarrow> nat set set" where
+"irl_idcs P = {I. (\<forall>Ss Ss'. (P Ss) \<longleftrightarrow> (P (override_on Ss Ss' I)))}"
+
+
+lemma map_add_com:
+  assumes "\<forall>i \<in> (dom Cs1) \<inter> (dom Cs2). Cs1 i = Cs2 i"
+  shows "(Cs1 ++ Cs2) = (Cs2 ++ Cs1)"
+  by (metis (full_types) IntI assms map_add_dom_app_simps(3) map_le_def map_le_iff_map_add_commute map_le_map_add)
+
+
+lemma conj_ext_main:
+  assumes "((dom Cs2) - (dom Cs1)) \<in> irl_idcs Q1"
+      and "Q1 (sem_rel Cs1 S)"
+    shows "Q1 (sem_rel (Cs2 ++ Cs1) S)"
+proof -
+  have H: "\<forall>i\<in>(UNIV - ((dom Cs2) - (dom Cs1))). (sem_rel (Cs2 ++ Cs1) S) i = (sem_rel Cs1 S) i"
+    by (metis Diff_iff map_add_dom_app_simps(1,2) sem_rel_def)
+  have "\<forall>i\<in>((dom Cs2) - (dom Cs1)). (sem_rel (Cs2 ++ Cs1) S) i = (sem_rel Cs2 S) i"
+    by (simp add: map_add_dom_app_simps(3) sem_rel_def)
+  let ?ff = "(override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1))"
+  have H2: "?ff = (sem_rel (Cs2 ++ Cs1) S)" 
+  proof
+    fix i 
+    from H show "override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1) i = sem_rel (Cs2 ++ Cs1) S i"
+      by (metis DiffI UNIV_I override_on_apply_in override_on_apply_notin)
+  qed
+  have "(Q1 (sem_rel Cs1 S) \<longleftrightarrow> Q1 (override_on (sem_rel Cs1 S) (sem_rel (Cs2 ++ Cs1) S) (dom Cs2 - dom Cs1)))" using assms(1)
+    by (simp add: irl_idcs_def)
+  with assms(2) have "Q1 ?ff" by auto
+  with H2 show ?thesis by auto
+qed
+
+text\<open>The generalized version of wp-conj\<close>
+theorem conj_ext:
+  assumes "\<Turnstile> {P} [Cs1] {Q1}"
+      and "\<Turnstile> {P} [Cs2] {Q2}"
+      and "((dom Cs2) - (dom Cs1)) \<in> irl_idcs Q1"
+      and "((dom Cs1) - (dom Cs2)) \<in> irl_idcs Q2"
+      and "\<forall>i \<in> (dom Cs1) \<inter> (dom Cs2). Cs1 i = Cs2 i"
+    shows "\<Turnstile> {P} [Cs1 ++ Cs2] {conj Q1 Q2}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S 
+  assume "P S"
+  from \<open>P S\<close> assms(1) relational_hyper_hoare_tripleE have H1: "Q1 (sem_rel (Cs1) S)" by auto
+  from \<open>P S\<close> assms(2) relational_hyper_hoare_tripleE have H2: "Q2 (sem_rel (Cs2) S)" by auto
+  from map_add_com conj_ext_main H1 assms(3,5) have "Q1 (sem_rel (Cs1 ++ Cs2) S)" by metis
+  moreover from conj_ext_main H2 assms(4,5) have "Q2 (sem_rel (Cs1 ++ Cs2) S)" by metis  
+  ultimately show "conj Q1 Q2 (sem_rel (Cs1 ++ Cs2) S)" unfolding conj_def by auto
+qed
+
+
+definition wp_RHHL :: "'a hyper_program \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> 'a rel_hyper_assertion" where
+"wp_RHHL Cs Q = (\<lambda>S. (Q (sem_rel Cs S)))"
+
+
+lemma wp_RHHL_E: 
+  assumes "wp_RHHL Cs Q S"
+  shows "(Q (sem_rel Cs S))"
+  using assms unfolding wp_RHHL_def
+  by simp
+
+lemma wp_RHHL_I: 
+  assumes "(Q (sem_rel Cs S))"
+  shows "wp_RHHL Cs Q S"
+  using assms unfolding wp_RHHL_def
+  by simp
+
+text\<open>The generalized version of the right-to-left direction of wp-nest\<close>
+theorem split_rule:
+  assumes "\<Turnstile> { P } [ Cs ++ Cs' ] { Q }"
+      and "dom Cs \<inter> dom Cs' = {}"
+    shows "\<Turnstile> { P } [ Cs ] { wp_RHHL Cs' Q } \<and> \<Turnstile> { wp_RHHL Cs' Q } [ Cs' ] { Q }"
+proof
+  show "\<Turnstile> {P} [Cs] {wp_RHHL Cs' Q}"
+  proof (rule relational_hyper_hoare_tripleI)
+    fix S
+    assume "P S"
+    with assms(1) have "Q (sem_rel (Cs ++ Cs') S)"
+      by (simp add: relational_hyper_hoare_triple_def)
+    with assms(2) sem_lifted_on_disjoint_maps_seq have "Q (sem_rel Cs' (sem_rel Cs S))" 
+      by metis
+    thus "wp_RHHL Cs' Q (sem_rel Cs S)"
+      by (simp add: wp_RHHL_I)
+  qed
+next
+  show "\<Turnstile> {wp_RHHL Cs' Q} [Cs'] {Q}"
+    by (simp add: relational_hyper_hoare_tripleI wp_RHHL_def)
+qed
+
+(*
+definition single_sem_exists 
+  ("\<langle>_, _\<rangle>\<rightarrow>" [51,0] 81) where
+"\<langle>C, \<sigma>\<rangle>\<rightarrow> = (\<exists>\<sigma>'. \<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>')"
+
+
+text\<open>definition of relevant indices of a hyper-assertion adapted from LHC\<close>
+definition proj :: "'a hyper_program \<Rightarrow> 'a rel_hyper_assertion" where
+"proj Cs = (\<lambda>S. \<forall>i. (case (Cs i) of None \<Rightarrow> True | Some C \<Rightarrow> (\<forall>(l, \<sigma>)\<in>(S i). \<exists>\<sigma>'. \<langle>C, \<sigma>\<rangle> \<rightarrow> \<sigma>')))"
+*)
+
+definition project_out :: "nat set \<Rightarrow> 'a rel_hyper_assertion \<Rightarrow> 'a rel_hyper_assertion" where
+"project_out I P Ss = (\<exists>Ss'. P (override_on Ss Ss' I))"
+
+
+lemma proj_rule_main:
+  assumes "dom Cs \<inter> dom Cs' = {}"
+  shows "(sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs))) = (override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs))"
+proof
+  fix i 
+  show "sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs)) i = override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs) i"
+    by (metis (mono_tags, lifting) assms map_add_comm map_add_dom_app_simps(1,3) override_on_def sem_rel_def)
+qed
+
+text\<open>The generalized version of wp-proj\<close>
+theorem proj_rule:
+  assumes "\<Turnstile> { P } [ Cs ++ Cs' ] { Q }"
+      and "dom Cs \<inter> dom Cs' = {}"
+    shows "\<Turnstile> { project_out (dom Cs) P } [ Cs' ] { project_out (dom Cs) Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "project_out (dom Cs) P S"
+  from this obtain SCs where " P (override_on S SCs (dom Cs))"
+    using project_out_def by blast
+  with assms(1) have "Q (sem_rel (Cs ++ Cs') (override_on S SCs (dom Cs)))"
+    by (simp add: relational_hyper_hoare_tripleE)
+  with proj_rule_main assms(2) have "(Q (override_on (sem_rel Cs' S) (sem_rel Cs SCs) (dom Cs)))" 
+    by metis
+  thus "project_out (dom Cs) Q (sem_rel Cs' S)" 
+    using project_out_def by auto
+qed
+
+
+subsection \<open>Reindexing rules\<close>
+
+definition reindex_hyper_stuff where
+  "reindex_hyper_stuff \<pi> S n = S (\<pi> n)"
+
+lemma sem_lifted_reindex:
+  "reindex_hyper_stuff \<pi> (sem_rel Cs S) = sem_rel (reindex_hyper_stuff \<pi> Cs) (reindex_hyper_stuff \<pi> S)"
+  apply (rule ext)
+  by (simp add: reindex_hyper_stuff_def sem_rel_def)
+
+definition reindex_assertion where
+"reindex_assertion \<pi> P S = P (reindex_hyper_stuff \<pi> S)"
+
+abbreviation id_upd :: "'a \<Rightarrow> 'a \<Rightarrow> 'a \<Rightarrow> 'a"  
+("\<lparr>_ \<mapsto> _\<rparr>")
+where
+  "\<lparr>i \<mapsto> x\<rparr> \<equiv> id(i := x)"
+
+lemma reindex_pass_main:
+  assumes "i \<notin> (dom Cs) \<and> j \<notin> (dom Cs)"
+  shows "(reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) = Cs"
+  unfolding reindex_hyper_stuff_def
+proof(rule)
+  from assms have H: "Cs i = None \<and> Cs j = None" by auto
+  fix i'
+  have "i' = j \<or> i' \<noteq> j" by auto
+  thus "Cs (\<lparr>j \<mapsto> i\<rparr> i') = Cs i'"
+  proof
+    assume "i' = j"
+    with H show "Cs (\<lparr>j \<mapsto> i\<rparr> i') = Cs i'" by simp
+  next
+    assume "i' \<noteq> j"
+    thus  "Cs (\<lparr>j \<mapsto> i\<rparr> i') = Cs i'" by simp
+  qed
+qed
+
+
+text\<open>The generalized version of wp-idx-pass\<close>
+theorem reindex_pass:
+  assumes "\<Turnstile> { P } [ Cs ] { Q }"
+      and "i \<notin> (dom Cs) \<and> j \<notin> (dom Cs)"
+    shows "\<Turnstile> { reindex_assertion \<lparr>j \<mapsto> i\<rparr> P} [ Cs ] { reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
+  hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
+    by (simp add: reindex_assertion_def)
+  with assms(1) have "Q (sem_rel Cs (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+    by (simp add: relational_hyper_hoare_tripleE)
+  with assms(2) reindex_pass_main have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))" 
+    by metis
+  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_rel Cs S))"
+    by (simp add: sem_lifted_reindex)
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel Cs S)" 
+    by (simp add: reindex_assertion_def)
+qed
+
+lemma reindex_merge_main:
+  assumes "i \<notin> (dom Cs') \<and> j \<notin> (dom Cs')"
+  shows "reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs') = [i \<mapsto> C, j \<mapsto> C] ++ Cs'"
+  unfolding reindex_hyper_stuff_def
+proof (rule)
+  fix i'
+  have "i' = j \<or> i' \<noteq> j" by auto
+  thus "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([i \<mapsto> C, j \<mapsto> C] ++ Cs') i'"
+  proof
+    assume "i' = j"
+    with assms show "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([i \<mapsto> C, j \<mapsto> C] ++ Cs') i'"
+      by (simp add: map_add_dom_app_simps(3))
+  next
+    assume "i' \<noteq> j"
+    with assms show "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([i \<mapsto> C, j \<mapsto> C] ++ Cs') i'"
+      by (simp add: map_add_upd_left)
+  qed
+qed
+
+text\<open>The generalized version of wp-idx-merge\<close>
+theorem reindex_merge:
+  assumes "\<Turnstile> { P } [ [i \<mapsto> C, j \<mapsto> C] ++ Cs' ] { Q } \<and> i \<notin> (dom Cs') \<and> j \<notin> (dom Cs')" 
+    shows "\<Turnstile> { reindex_assertion \<lparr>j \<mapsto> i\<rparr> P} [ [i \<mapsto> C] ++ Cs' ] { reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
+  hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
+    by (simp add: reindex_assertion_def)
+  with assms(1) have "Q (sem_rel ([i \<mapsto> C, j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+    using relational_hyper_hoare_tripleE by blast
+  with reindex_merge_main assms(1) have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+    by metis
+  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_rel ([i \<mapsto> C] ++ Cs' ) S))"
+    by (simp add: sem_lifted_reindex)
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel ([i \<mapsto> C] ++ Cs') S)" 
+    by (simp add: reindex_assertion_def)
+qed
+
+
+lemma reindex_swap_main:
+  assumes "i \<notin> (dom Cs') \<and> j \<notin> (dom Cs')"
+  shows "\<forall>i' \<noteq> i. (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs') i') = (([j \<mapsto> C] ++ Cs') i')"
+  unfolding reindex_hyper_stuff_def
+proof (intro allI ballI impI)
+  fix i'
+  assume " i' \<noteq> i"
+  have "i' = j \<or> i' \<noteq> j" by auto
+  thus "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([j \<mapsto> C] ++ Cs') i'"
+  proof
+    assume "i' = j"
+    with assms show "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([j \<mapsto> C] ++ Cs') i'"
+      by (simp add: map_add_dom_app_simps(3))
+  next
+    assume "i' \<noteq> j"
+    with assms show "([i \<mapsto> C] ++ Cs') (\<lparr>j \<mapsto> i\<rparr> i') = ([j \<mapsto> C] ++ Cs') i'"
+      by (simp add: \<open>i' \<noteq> i\<close> map_add_upd_left)
+  qed
+qed
+
+
+lemma reindex_swap_main2:
+  assumes "\<forall>i' \<noteq> i. Cs1 i' = Cs2 i'"
+      and "i \<notin> idx Q"
+  shows "Q (sem_rel Cs1 S) = Q (sem_rel Cs2 S)"
+proof -
+  have "(sem_rel Cs2 S) = (sem_rel Cs1 S)(i := (sem_rel Cs2 S) i)"
+  proof
+    fix j
+    have "j = i \<or> j \<noteq> i" by auto
+    thus "(sem_rel Cs2 S) j = ((sem_rel Cs1 S)(i := (sem_rel Cs2 S) i)) j"
+    proof
+      assume "j = i"
+      thus "sem_rel Cs2 S j = ((sem_rel Cs1 S)(i := sem_rel Cs2 S i)) j"
+        by simp
+    next 
+      assume "j \<noteq> i" 
+      with assms(1) show "sem_rel Cs2 S j = ((sem_rel Cs1 S)(i := sem_rel Cs2 S i)) j"
+        by (simp add: sem_rel_def)
+    qed
+  qed
+  with assms(2) show "Q (sem_rel Cs1 S) = Q (sem_rel Cs2 S)" unfolding idx_def
+    by (metis (mono_tags, lifting) UNIV_I mem_Collect_eq set_diff_eq)
+qed
+
+
+text\<open>The generalized version of wp-idx-swap\<close>
+theorem reindex_swap:
+  assumes "\<Turnstile> { P } [ [j \<mapsto> C] ++ Cs' ] { Q } \<and> j \<notin> (dom Cs')"
+      and "i \<notin> (idx Q) \<and> i \<notin> (dom Cs')"
+    shows "\<Turnstile> { reindex_assertion \<lparr>j \<mapsto> i\<rparr> P} [ [i \<mapsto> C] ++ Cs' ] { reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "reindex_assertion \<lparr>j \<mapsto> i\<rparr> P S"
+  hence "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
+    by (simp add: reindex_assertion_def)
+  with assms(1) have "Q (sem_rel ([j \<mapsto> C] ++ Cs') (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+    using relational_hyper_hoare_tripleE by blast
+  with assms reindex_swap_main reindex_swap_main2 
+    have "Q (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> ([i \<mapsto> C] ++ Cs')) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+      by (smt (verit, ccfv_SIG))
+  hence "Q (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> (sem_rel ([i \<mapsto> C] ++ Cs' ) S))"
+    by (simp add: sem_lifted_reindex)
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel ([i \<mapsto> C] ++ Cs') S)" 
+    by (simp add: reindex_assertion_def)
+qed
+
+
+
+
+
+lemma reindex_post_main:
+  assumes "j \<notin> (dom Cs)"
+  shows "let S' = (sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S) in 
+        (sem_rel Cs (S(j := S' j))) = S'"
+  unfolding Let_def
+proof
+  let ?S' = "(sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) S)"
+  fix i'
+  have "i' = j \<or> i' \<noteq> j" by auto
+  thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'"
+  proof
+    assume "i' = j"
+    thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_rel_def
+      using assms by fastforce
+  next 
+    assume "i' \<noteq> j"
+    thus "sem_rel Cs (S(j := ?S' j)) i' = ?S' i'" unfolding sem_rel_def
+      by (simp add: reindex_hyper_stuff_def)
+  qed
+qed
+
+
+
+
+text\<open>The generalized version of wp-idx-post\<close>
+theorem reindex_post:
+  assumes "\<Turnstile> { P } [ Cs ] { Q }"
+      and "j \<notin> (dom Cs) \<and> j \<notin> (idx P)"
+    shows "\<Turnstile> { P } [ Cs ] { reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q }"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  let ?S' = "(sem_rel (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> Cs) (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S))"
+  assume "P S"
+  have "(reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S) = S(j:=(S i))" unfolding reindex_hyper_stuff_def
+    by fastforce
+  with \<open>P S\<close> assms(2) have "P (reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)"
+    using idxE by force
+  with assms(2) have "P ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j))"
+    using idxE by blast
+  with assms(1) have H: "Q (sem_rel Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j)))"
+    by (simp add: relational_hyper_hoare_tripleE)
+  from assms(2) have "(sem_rel Cs ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr> S)(j := ?S' j))) j = ?S' j" unfolding sem_rel_def by force
+  from reindex_post_main assms(2) H have "Q ?S'" by metis
+  hence "Q ((reindex_hyper_stuff \<lparr>j \<mapsto> i\<rparr>) (sem_rel Cs S))"
+    by (simp add: sem_lifted_reindex)
+  thus "reindex_assertion \<lparr>j \<mapsto> i\<rparr> Q (sem_rel Cs S)" 
+    by (simp add: reindex_assertion_def)
+qed
+
+
+
+subsection \<open>Lockstep rules\<close>
+
+
+text\<open>The generalized version of the right-to-left direction of wp-seqI\<close>
+theorem seq_split_rule:
+  assumes "\<Turnstile> { P } [ hyper_seq Cs Cs' ] { Q }"
+    shows "\<Turnstile> { P } [ Cs ] { wp_RHHL Cs' Q } \<and> \<Turnstile> { wp_RHHL Cs' Q } [ Cs' ] { Q }"
+proof
+  show "\<Turnstile> {P} [Cs] {wp_RHHL Cs' Q}"
+  proof (rule relational_hyper_hoare_tripleI)
+    fix S
+    assume "P S"
+    with assms(1) have "Q (sem_rel (hyper_seq Cs Cs') S)"
+      by (simp add: relational_hyper_hoare_triple_def)
+    hence "Q (sem_rel Cs' (sem_rel Cs S))" 
+      by (simp add: sem_lifted_hyper_seq)
+    thus "wp_RHHL Cs' Q (sem_rel Cs S)"
+      by (simp add: wp_RHHL_I)
+  qed
+next
+  show "\<Turnstile> {wp_RHHL Cs' Q} [Cs'] {Q}"
+    by (simp add: relational_hyper_hoare_tripleI wp_RHHL_def)
+qed
+
+
+lemma if_lockstep_true_sym:
+  assumes "\<Turnstile> { conj P (holds_forall_hyper I bs)} [[ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }"
+  shows "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }"
+proof -
+  have H:"sem_equiv_hyper_cond [ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ] [i \<mapsto> (Cs1 i) | i \<in> I]  (conj P (holds_forall_hyper I bs))"
+    apply(auto simp add:holds_forall_hyper_def sem_equiv_hyper_cond_def conj_def snd_def sem_rel_rewrite)
+    apply(rule ext)
+    apply(auto simp add:sem_def if_then_else_def lnot_def)
+     apply (metis SemAssume SemIf1 SemSeq case_prod_conv)
+    by (metis SemAssume SemIf1 case_prod_conv single_sem.SemSeq)
+    show "\<Turnstile> { conj P (holds_forall_hyper I bs) } [[i \<mapsto> (Cs1 i) | i \<in> I]] { Q }" 
+      apply(rule rewrite_rule_cond)
+      prefer 2 using assms apply(simp)
+      using H apply(simp)
+      done
+qed
+
+text\<open>A symmetric rule to if_lockstep_arbitrary inspired by the right-to-left direction of LHC's wp-ifI\<close>
+theorem if_lockstep_arbitrary_sym:
+    assumes "\<forall>i\<in>I. entails P (\<lambda>S. ((holds_forall (bs i) (S i)))) \<or> entails P (\<lambda>S. ((holds_forall (lnot (bs i)) (S i))))"
+        and "\<Turnstile> { P } [[ i \<mapsto> (if_then_else (bs i) (Cs1 i) (Cs2 i)) | i \<in> I ]] { Q }" 
+      shows "\<Turnstile> { P } [[ i \<mapsto> (pick_branch P bs Cs1 Cs2 i) | i \<in> I]] { Q }"
+proof -
+  let ?bs' = "\<lambda>i. (if (entails P (\<lambda>S. (holds_forall (bs i) (S i)))) then (bs i) else (lnot_hyper bs i))"
+  let ?Cs1' = "\<lambda>i. (if (entails P (\<lambda>S. (holds_forall (bs i) (S i)))) then (Cs1 i) else (Cs2 i))"
+  let ?Cs2' = "\<lambda>i. (if (entails P (\<lambda>S. (holds_forall (bs i) (S i)))) then (Cs2 i) else (Cs1 i))"
+  from assms if_equiv sem_equiv_hyper_cond_refl have equiv:"sem_equiv_hyper_cond [ i \<mapsto> if_then_else (bs i) (Cs1 i) (Cs2 i) | i \<in> I ] [ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]
+                          P"
+    by fastforce
+  with assms(2) rewrite_rule_cond have if_ht: "\<Turnstile> {P} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}" by auto
+  from assms(1) have hfa:"entails P (holds_forall_hyper I ?bs')"
+    by(auto simp add:entails_def holds_forall_def holds_forall_hyper_def lnot_def lnot_hyper_def)
+  hence ent_conj:"entails P (conj P (holds_forall_hyper I ?bs'))"
+    by (metis (lifting) entail_conj entails_def)
+  with if_ht have "\<Turnstile> {conj P (holds_forall_hyper I ?bs')} [[ i \<mapsto> if_then_else (?bs' i) (?Cs1' i) (?Cs2' i) | i \<in> I ]] {Q}"
+    using entail_conj_weaken cons_prec by blast
+  with if_lockstep_true_sym have "\<Turnstile> { conj P (holds_forall_hyper I ?bs') } [[i \<mapsto> (?Cs1' i) | i \<in> I]] { Q }"
+    by fastforce
+  with ent_conj cons_prec have "\<Turnstile> { P } [[i \<mapsto> (?Cs1' i) | i \<in> I]] { Q }" 
+    by auto
+  thus ?thesis by auto
+qed
+
+
+subsection \<open>Structural Rules\<close>
+text\<open>From the LHC's structural rules we actually only adopt the reindexing rule, as other rules 
+    are not concerned with relational reasoning\<close>
+
+
+lemma reindex_inv_org:
+  assumes "bij \<pi>"
+  shows "reindex_hyper_stuff \<pi> (reindex_hyper_stuff (inv \<pi>) S) = S"
+  unfolding reindex_hyper_stuff_def
+  by (metis (no_types, lifting) ext assms bij_betw_def inv_f_f)
+
+text\<open>A classical reindexing rule for a bijective reindexing which generelizes LHC's wp-idx and idx rules\<close>
+theorem reindex_rule:
+  assumes "\<Turnstile> {P} [Cs] {Q}"
+      and "bij \<pi>"
+    shows "\<Turnstile> {reindex_assertion \<pi> P} [reindex_hyper_stuff (inv \<pi>) Cs] {reindex_assertion \<pi> Q}"
+proof (rule relational_hyper_hoare_tripleI)
+  fix S
+  assume "reindex_assertion \<pi> P S"
+  hence "P (reindex_hyper_stuff \<pi> S)" unfolding reindex_assertion_def by auto
+  with assms(1) have "Q (sem_rel Cs (reindex_hyper_stuff \<pi> S))" unfolding relational_hyper_hoare_triple_def
+    by auto
+  with sem_lifted_reindex reindex_inv_org \<open>bij \<pi>\<close> have "Q (reindex_hyper_stuff \<pi> (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S))"
+    by metis
+  then show "reindex_assertion \<pi> Q (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
+qed
+
+
 end
