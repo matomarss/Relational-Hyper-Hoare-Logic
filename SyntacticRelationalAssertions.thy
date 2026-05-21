@@ -1,7 +1,7 @@
 section \<open>Syntactic Relational Assertions\<close>
 
 theory SyntacticRelationalAssertions
-  imports Loops  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes" "HOL-Library.FuncSet"
+  imports "HHL/Loops"  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes" "HOL-Library.FuncSet"
 begin
 
 subsection \<open>Preliminaries: Types, expressions, 'a syn_assertions\<close>
@@ -9497,9 +9497,27 @@ proof -
                           apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(2) prems(18,19) assms by(fastforce) qed
                               apply(erule conjE)+
-          subgoal premises prems proof - show ?thesis using prems(3) prems(18,19) assms
-              apply(auto)
-               by (smt (verit) plus_ol.simps(1) snd_conv)
+          subgoal premises prems for S proof (simp split: if_splits, intro allI ballI impI)
+            fix l 
+            fix \<sigma>'::"int_and_list npstate"
+            assume "\<exists>\<sigma>. \<sigma>' = \<sigma>(i := \<sigma> i +\<^sub>o #1) \<and> (l, \<sigma>) \<in> S (Suc 0)"
+            from this obtain \<sigma> where subeq:"\<sigma>' = \<sigma>(i := \<sigma> i +\<^sub>o #1)" and s1:"(l, \<sigma>) \<in> S (Suc 0)" by blast
+            with prems(3) obtain \<sigma>''::"int_and_list nstate" where s2:"\<sigma>''\<in> S 2" and cl:"\<sigma> s = snd \<sigma>'' s \<and>
+        \<sigma> x = snd \<sigma>'' x0 +\<^sub>o snd \<sigma>'' x1 +\<^sub>o snd \<sigma>'' x2 +\<^sub>o snd \<sigma>'' x3" and eqimp:"\<sigma> i = snd \<sigma>'' i +\<^sub>o #3 " by auto
+            from prems(19) s2 obtain i' where eq1:"snd \<sigma>'' i = #i'" by auto
+            from prems(18) s1 obtain i'' where eq2:"\<sigma> i = #i''" by auto
+            have f1:"\<sigma>' i = snd \<sigma>'' i +\<^sub>o #4"
+              apply(simp only: subeq eqimp eq1)
+              by(auto)
+            from cl have f2:"\<sigma>' s = snd \<sigma>'' s \<and>
+              \<sigma>' x = snd \<sigma>'' x0 +\<^sub>o snd \<sigma>'' x1 +\<^sub>o snd \<sigma>'' x2 +\<^sub>o snd \<sigma>'' x3"
+              apply(simp only: subeq)
+              using assms
+              by(auto)
+            from f1 f2 s2 show " \<exists>\<sigma>2\<in>S 2.
+              \<sigma>' s = snd \<sigma>2 s \<and>
+              \<sigma>' x = snd \<sigma>2 x0 +\<^sub>o snd \<sigma>2 x1 +\<^sub>o snd \<sigma>2 x2 +\<^sub>o snd \<sigma>2 x3 \<and> \<sigma>' i = snd \<sigma>2 i +\<^sub>o #4"
+              by auto
             qed
             apply(erule conjE)+
           subgoal premises prems proof - show ?thesis using prems(4) assms by(fastforce) qed
