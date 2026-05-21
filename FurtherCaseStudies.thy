@@ -1,6 +1,6 @@
 text \<open>5 Further case studies\<close>
 theory FurtherCaseStudies
-  imports SyntacticRelationalAssertions
+  imports ProofRules
 begin
 
 

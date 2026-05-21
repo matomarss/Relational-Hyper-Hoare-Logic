@@ -1,5 +1,5 @@
-theory SubsumptionLHC
-  imports SyntacticRelationalAssertions
+theory CaseStudySubsumingLHC
+  imports ProofRules
 begin
 
 text\<open> IMPORTANT!

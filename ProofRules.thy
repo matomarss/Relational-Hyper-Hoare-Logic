@@ -1,6 +1,6 @@
 text \<open>3 Proof rules\<close>
-theory SyntacticRelationalAssertions
-  imports RHHL_Logic
+theory ProofRules
+  imports LogicRHHL
 begin
 
 section\<open>Preliminaries\<close>

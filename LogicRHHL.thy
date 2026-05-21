@@ -1,5 +1,5 @@
 text \<open>2 Logic\<close>
-theory RHHL_Logic
+theory LogicRHHL
   imports "HHL/Loops"  "HOL-Library.While_Combinator" "HOL-Computational_Algebra.Primes" "HOL-Library.FuncSet"
 begin
 
