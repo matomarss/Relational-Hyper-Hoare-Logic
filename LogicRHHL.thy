@@ -144,7 +144,7 @@ lemma sat_assertion_Imp:
 abbreviation interp_assert where "interp_assert \<equiv> sat_assertion [] []"
 
 
-section\<open>Syntactic programs\<close>
+subsection\<open>Syntactic programs\<close>
 
 text \<open>Syntactic program expressions\<close>
 datatype 'a pexp =
