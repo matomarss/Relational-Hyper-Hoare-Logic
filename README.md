@@ -12,6 +12,9 @@ The repository is intended to be navigated together with the thesis:
 
 ## Note on the HHL directory
 
-The `HHL` directory contains theories originally developed for the *Hyper Hoare Logic* paper. These theories are included because Relational Hyper Hoare Logic extends Hyper Hoare Logic and therefore reuses some of its definitions and results.
+The `HHL` directory contains theories not developed as part of the *Relational Hyper Hoare Logic* master's thesis. They were developed for the *Hyper Hoare Logic* paper. These theories are included because Relational Hyper Hoare Logic extends Hyper Hoare Logic and therefore reuses some of its definitions and results.
 
-All theories located at the topmost level of the repository were developed as part of this thesis. Any of them can be opened in Isabelle/jEdit and traversed independently.
+All theories located at the topmost level of the repository were developed as part of the *Relational Hyper Hoare Logic* master's thesis. 
+
+## Usage note
+Any of the theorey files can be opened in Isabelle/jEdit and traversed independently. All other required theories will be loaded automatically.
