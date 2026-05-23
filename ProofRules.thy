@@ -1,6 +1,6 @@
 text \<open>3 Proof rules\<close>
 theory ProofRules
-  imports LogicRHHL
+  imports FoundationsRHHL
 begin
 
 section\<open>Preliminaries\<close>
@@ -56,17 +56,6 @@ text\<open>Definitions of \<box>_i p and (\<not>b)(\<sigma>) can be found in HHL
 
 text\<open>Definitions of conjunction, disjunction and entailment of hyper-assertions and also relational hyper-assertions can be found in 
      HHL/Logic as conj, disj and entails\<close>
-
-text\<open>Defintions of the if-else and while commands you can find in HHL/Loops as if_then_else and while_cond\<close>
-
-text\<open>Definition of the if command
-    - the missing else branch is represented with the Skip command\<close>
-definition if_then_else_skip where
-"if_then_else_skip b C = if_then_else b C Skip "
-
-notation if_then_else  ("IF _ THEN _ ELSE _" [0, 0, 61] 61)
-notation if_then_else_skip  ("IF _  THEN _ FI" [0, 60] 61)
-notation while_cond  ("WHILE _ DO _" [0, 61] 61)
 
 
 section \<open>3.2 Basic rules\<close>
