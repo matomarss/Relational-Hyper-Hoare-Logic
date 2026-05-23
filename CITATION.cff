@@ -1,8 +1,0 @@
-cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-authors:
-- family-names: "Martinček"
-  given-names: "Matej"
-title: "RHHL formalization"
-date-released: 2026-05-26
-url: "https://github.com/matomarss/rhhl-formalization"
