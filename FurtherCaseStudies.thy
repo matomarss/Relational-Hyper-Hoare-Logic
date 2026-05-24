@@ -2415,9 +2415,9 @@ proposition
   shows  "\<Turnstile> {(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). (snd \<sigma>2 s) !\<^sub>o ((len (snd \<sigma>2 s))-\<^sub>o #1) \<noteq> (snd \<sigma>2 x))
              \<and> (\<forall>\<sigma>2\<in>(S 1). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). \<forall>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)) -\<^sub>o #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o #0)
+              \<and> (\<forall>\<sigma>2\<in>(S 2). (snd \<sigma>2 i) = (len (snd \<sigma>2 s)) -\<^sub>o #1 \<and> (snd \<sigma>2 i) \<ge>\<^sub>o #0)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>xs::int list. snd \<sigma>1 s = ListV xs) \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>xs::int list. snd \<sigma>2 s = ListV xs)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>i'::int. snd \<sigma>1 i = IntV i') \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>i'::int. snd \<sigma>2 i = IntV i')
        )} 
@@ -2427,9 +2427,9 @@ proof-
   let ?P="(\<lambda>S::int_and_list hyper_set.  (\<exists>\<sigma>2\<in>(S 2). (snd \<sigma>2 s) !\<^sub>o ((len (snd \<sigma>2 s))-\<^sub>o #1) \<noteq> (snd \<sigma>2 x))
              \<and> (\<forall>\<sigma>2\<in>(S 1). \<forall>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>2\<in>(S 2). \<forall>\<sigma>1\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>\<sigma>1\<in>(S 1). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
-              \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
+              \<and> (\<forall>\<sigma>1\<in>(S 1). \<forall>\<sigma>2\<in>(S 2). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i)
               \<and> (\<forall>\<sigma>1\<in>(S 1). (snd \<sigma>1 i) = (len (snd \<sigma>1 s)) -\<^sub>o #1 \<and> (snd \<sigma>1 i) \<ge>\<^sub>o #0)
+              \<and> (\<forall>\<sigma>2\<in>(S 2). (snd \<sigma>2 i) = (len (snd \<sigma>2 s)) -\<^sub>o #1 \<and> (snd \<sigma>2 i) \<ge>\<^sub>o #0)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>xs::int list. snd \<sigma>1 s = ListV xs) \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>xs::int list. snd \<sigma>2 s = ListV xs)
               \<and> (\<forall>\<sigma>1\<in>(S 1). \<exists>i'::int. snd \<sigma>1 i = IntV i') \<and> (\<forall>\<sigma>2\<in>(S 2). \<exists>i'::int. snd \<sigma>2 i = IntV i')
        )"
@@ -2459,9 +2459,9 @@ proof-
     show "\<exists>S::int_and_list hyper_set. (\<exists>\<sigma>2\<in>S 2. snd \<sigma>2 s !\<^sub>o (len (snd \<sigma>2 s) -\<^sub>o #1) \<noteq> snd \<sigma>2 x) \<and>
         (\<forall>\<sigma>2\<in>S (Suc 0). \<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
         (\<forall>\<sigma>2\<in>S 2. \<forall>\<sigma>1\<in>S 2. snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
-        (\<forall>\<sigma>2\<in>S 2. \<exists>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
-        (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>\<sigma>2\<in>S 2. snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
+        (\<forall>\<sigma>1\<in>S (Suc 0). \<forall>\<sigma>2\<in>S 2. snd \<sigma>1 s = snd \<sigma>2 s \<and> snd \<sigma>1 i = snd \<sigma>2 i) \<and>
         (\<forall>\<sigma>1\<in>S (Suc 0). snd \<sigma>1 i = len (snd \<sigma>1 s) -\<^sub>o #1 \<and> snd \<sigma>1 i \<ge>\<^sub>o #0) \<and>
+        (\<forall>\<sigma>2\<in>(S 2). (snd \<sigma>2 i) = (len (snd \<sigma>2 s)) -\<^sub>o #1 \<and> (snd \<sigma>2 i) \<ge>\<^sub>o #0) \<and> 
         (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>xs. snd \<sigma>1 s = ListV xs) \<and>
         (\<forall>\<sigma>2\<in>S 2. \<exists>xs. snd \<sigma>2 s = ListV xs) \<and>
         (\<forall>\<sigma>1\<in>S (Suc 0). \<exists>i'. snd \<sigma>1 i = #i') \<and>
@@ -2473,7 +2473,7 @@ proof-
       subgoal premises prems proof - show ?thesis using assms xorg by(auto) qed
       subgoal premises prems proof - show ?thesis by(auto) qed
       subgoal premises prems proof - show ?thesis by(auto) qed
-      subgoal premises prems proof - show ?thesis by(auto) qed
+      subgoal premises prems proof - show ?thesis using assms by(auto) qed
       subgoal premises prems proof - show ?thesis using assms by(auto) qed
       subgoal premises prems proof - show ?thesis using assms by(auto simp add:emp_def) qed
       subgoal premises prems proof - show ?thesis using assms by(auto) qed
@@ -2534,15 +2534,10 @@ proof-
     subgoal premises prems proof - show ?thesis using prems(9) by(fastforce) qed
      apply(erule conjE)+
     subgoal premises prems proof - show ?thesis using prems(10) by(fastforce) qed
-     apply(erule conjE)+
+       apply(erule conjE)+
     subgoal premises prems proof - show ?thesis using prems(11) by(fastforce) qed
-      apply(erule conjE)+
-    subgoal premises prems for S proof - show ?thesis
-      proof -
-        have H:"\<forall>\<sigma>2\<in>S 2. snd \<sigma>2 i = (len (snd \<sigma>2 s) -\<^sub>o  #1)" using prems(4) prems(6) prems(5) prems(9) prems(8) prems(7) unfolding emp_def by fastforce
-        show ?thesis using H prems(9) prems(11) unfolding holds_forall_def lnot_def by auto
-      qed
-    qed
+     apply(erule conjE)+
+    subgoal premises prems for S proof - show ?thesis using prems(7) prems(9) prems(11) unfolding holds_forall_def lnot_def by auto qed
      apply(erule conjE)+
     subgoal premises prems proof - show ?thesis using prems(3) prems(6) prems(7) prems(8) unfolding holds_forall_def  by(fastforce) qed
     apply(simp only:eq)
