@@ -1592,5 +1592,4 @@ proof (rule relational_hyper_hoare_tripleI)
   then show "reindex_assertion \<pi> Q (sem_rel (reindex_hyper_stuff (inv \<pi>) Cs) S)" unfolding reindex_assertion_def by auto
 qed
 
-
 end
