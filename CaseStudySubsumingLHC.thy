@@ -66,6 +66,8 @@ lemma cs_v_dom_eq: "\<langle>Cs, S\<rangle> \<Down> \<langle>V, S'\<rangle> \<Lo
   by (metis (mono_tags, lifting) mem_Collect_eq option.distinct(1))
 
 
+
+
 definition imp :: "hyper_assertion \<Rightarrow> hyper_assertion \<Rightarrow> hyper_assertion" where
   "imp P1 P2 = (\<lambda>S. (P1 S \<longrightarrow> P2 S))"
 
@@ -128,6 +130,15 @@ definition hyper_program_translation  :: "hyper_term \<Rightarrow> val hyper_pro
                                       | None \<Rightarrow> None
                                 ))"
 
+definition get_deepest_operation_depth_hyper :: "(nat \<rightharpoonup> trm) \<Rightarrow> (nat \<rightharpoonup> nat)" where
+"get_deepest_operation_depth_hyper Cs i = (case (Cs i) of (Some C) \<Rightarrow> Some (get_deepest_operation_depth C) | None \<Rightarrow> None)"
+
+
+lemma cs_ds_dom_eq: "dom (map_of Cs) = dom (get_deepest_operation_depth_hyper (map_of Cs))"
+  unfolding get_deepest_operation_depth_hyper_def dom_def
+  by (metis map_option_case option.map_disc_iff)
+
+
 
 subsection\<open>4.1.2 Translating states, return values, hyper-states and hyper-return values\<close>
 
@@ -135,11 +146,11 @@ definition transform_state_with_return_val :: "val \<Rightarrow> store \<Rightar
 "transform_state_with_return_val v \<sigma> l vp = (\<lambda>i. if i < length l then l ! i else (if i = length l then v else (if i < vp then 0 else \<sigma> (i - vp))))"
 
 definition retval_state_translation where
-"retval_state_translation v \<sigma> C = transform_state_with_return_val v \<sigma> [] (1 + get_deepest_operation_depth C)"
+"retval_state_translation v \<sigma> d = transform_state_with_return_val v \<sigma> [] (1 + d)"
 
 fun retval_state_translation_partial where 
 "retval_state_translation_partial v \<sigma> None = transform_state_with_return_val v \<sigma> [] 1" |
-"retval_state_translation_partial v \<sigma> (Some C) = retval_state_translation v \<sigma> C"
+"retval_state_translation_partial v \<sigma> (Some d) = retval_state_translation v \<sigma> d"
 
 
 
@@ -229,15 +240,15 @@ lemma state_transform_sp_acc:
 
 
 text\<open>Logical state is not meant to ever be accessed\<close>
-definition hyper_pre_state_translation :: "hyper_term \<Rightarrow> hyper_store \<Rightarrow> val hyper_set"
+definition hyper_pre_state_translation :: "(nat \<rightharpoonup> nat) \<Rightarrow> hyper_store \<Rightarrow> val hyper_set"
   where 
-"hyper_pre_state_translation Cs S = (\<lambda>i. {(undefined, retval_state_translation_partial 0 (S i) (map_of Cs i))})"
+"hyper_pre_state_translation ds S = (\<lambda>i. {(undefined, retval_state_translation_partial 0 (S i) (ds i))})"
 
 text\<open>Beware, the function does not return a hyper_set but rather sth like a hyper_store but in RHHL\<close>
-definition hyper_post_state_translation :: "hyper_term \<Rightarrow> hyper_return_value \<Rightarrow> hyper_store \<Rightarrow> nat \<Rightarrow> val npstate"
+definition hyper_post_state_translation :: "(nat \<rightharpoonup> nat) \<Rightarrow> hyper_return_value \<Rightarrow> hyper_store \<Rightarrow> nat \<Rightarrow> val npstate"
   where 
-"hyper_post_state_translation Cs V S = (\<lambda>i. (case map_of V i of (Some v) \<Rightarrow> (retval_state_translation_partial v (S i) (map_of Cs i))
-                                                                 |None    \<Rightarrow> (retval_state_translation_partial 0 (S i) (map_of Cs i))))"
+"hyper_post_state_translation ds V S = (\<lambda>i. (case map_of V i of (Some v) \<Rightarrow> (retval_state_translation_partial v (S i) (ds i))
+                                                                 |None    \<Rightarrow> (retval_state_translation_partial 0 (S i) (ds i))))"
 
 
 fun hyper_post_state_translation_inv1 :: "(nat \<Rightarrow> val npstate) \<Rightarrow> hyper_term \<Rightarrow> hyper_return_value"
@@ -254,16 +265,18 @@ definition hyper_post_state_translation_inv2 :: "hyper_term \<Rightarrow> (nat \
 "hyper_post_state_translation_inv2 Cs S = (\<lambda>i. post_state_translation_inv2 (S i) (map_of Cs i))"
 
 
-lemma post_trans_inv: "post_state_translation_inv2 (retval_state_translation_partial 0 (\<sigma>) C) C = \<sigma>"
+lemma post_trans_inv: "post_state_translation_inv2 (retval_state_translation_partial 0 (\<sigma>) ((get_deepest_operation_depth_hyper Cs) i)) (Cs i) = \<sigma>"
 proof(rule ext)
   fix x
-  show "post_state_translation_inv2 (retval_state_translation_partial 0 \<sigma> C) C x = \<sigma> x"
-  proof (cases C)
+  show "post_state_translation_inv2 (retval_state_translation_partial 0 (\<sigma>) ((get_deepest_operation_depth_hyper Cs) i)) (Cs i) x  = \<sigma> x"
+    unfolding get_deepest_operation_depth_hyper_def
+  proof (cases "Cs i")
     case None
-    then show ?thesis  by(auto simp add:transform_state_with_return_val_def)
+    then show "post_state_translation_inv2 (retval_state_translation_partial 0 \<sigma> (case Cs i of None \<Rightarrow> None | Some C \<Rightarrow> Some (get_deepest_operation_depth C))) (Cs i) x = \<sigma> x"  by(auto simp add:transform_state_with_return_val_def)
   next
     case (Some C')
-    show ?thesis using \<open>C = Some C'\<close> by(auto simp add:retval_state_translation_def transform_state_with_return_val_def)
+    show "post_state_translation_inv2 (retval_state_translation_partial 0 \<sigma> (case Cs i of None \<Rightarrow> None | Some C \<Rightarrow> Some (get_deepest_operation_depth C))) (Cs i) x =
+         \<sigma> x" using \<open>Cs i = Some C'\<close> by(auto simp add:retval_state_translation_def transform_state_with_return_val_def)
   qed
 qed
 
@@ -315,63 +328,63 @@ proof -
 qed
 
 
-lemma hyper_post_state_translation_inj: "\<forall>V S V' S' Cs. hyper_post_state_translation Cs V S = hyper_post_state_translation Cs V' S' \<and> dom (map_of V) = dom (map_of V') \<longrightarrow> (map_of V) = (map_of V') \<and> S = S'"
+lemma hyper_post_state_translation_inj: "\<forall>V S V' S' ds. hyper_post_state_translation ds V S = hyper_post_state_translation ds V' S' \<and> dom (map_of V) = dom (map_of V') \<longrightarrow> (map_of V) = (map_of V') \<and> S = S'"
   unfolding hyper_post_state_translation_def
 proof(intro allI ballI impI conjI, elim conjE)
-  show "\<And>V S V' S' Cs.
-       \<lbrakk>(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i));
+  show "\<And>V S V' S' ds.
+       \<lbrakk>(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i));
         dom (map_of V) = dom (map_of V')\<rbrakk>
        \<Longrightarrow> map_of V = map_of V'"
   proof
-    fix V S V' S' Cs i
-    assume "(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i))"
-    hence asmf: "(case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-        (case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i))" by metis
+    fix V S V' S' ds i
+    assume "(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i))"
+    hence asmf: "(case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+        (case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i))" by metis
     assume "dom (map_of V) = dom (map_of V')"
     with asmf show "map_of V i = map_of V' i"
       apply(auto split:option.splits)
-    proof(cases "(map_of Cs i)")
+    proof(cases "(ds i)")
       case None
       then show "\<And>x2 x2a.
        \<lbrakk>dom (map_of V) = dom (map_of V'); map_of V' i = Some x2; map_of V i = Some x2a;
-        retval_state_translation_partial x2a (S i) (map_of Cs i) = retval_state_translation_partial x2 (S' i) (map_of Cs i); map_of Cs i = None\<rbrakk>
+        retval_state_translation_partial x2a (S i) (ds i) = retval_state_translation_partial x2 (S' i) (ds i); ds i = None\<rbrakk>
        \<Longrightarrow> x2a = x2" using state_transform_eq by auto
     next
       case (Some a)
       then show "\<And>x2 x2a a.
        \<lbrakk>dom (map_of V) = dom (map_of V'); map_of V' i = Some x2; map_of V i = Some x2a;
-        retval_state_translation_partial x2a (S i) (map_of Cs i) = retval_state_translation_partial x2 (S' i) (map_of Cs i); map_of Cs i = Some a\<rbrakk>
+        retval_state_translation_partial x2a (S i) (ds i) = retval_state_translation_partial x2 (S' i) (ds i); ds i = Some a\<rbrakk>
        \<Longrightarrow> x2a = x2" using retval_state_translation_inj by auto
     qed
   qed 
 next
-  show "\<And>V S V' S' Cs.
-       (\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-       (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i)) \<and>
+  show "\<And>V S V' S' ds.
+       (\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+       (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i)) \<and>
        dom (map_of V) = dom (map_of V') \<Longrightarrow>
        S = S'"
   proof(rule ext, elim conjE)
-  fix V S V' S' Cs i
-    assume "(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i))"
-    hence asmf: "(case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (map_of Cs i)
-             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (map_of Cs i)) =
-        (case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (map_of Cs i)
-              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (map_of Cs i))" by metis
+  fix V S V' S' ds i
+    assume "(\<lambda>i. case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+        (\<lambda>i. case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i))"
+    hence asmf: "(case map_of V i of None \<Rightarrow> retval_state_translation_partial 0 (S i) (ds i)
+             | Some v \<Rightarrow> retval_state_translation_partial v (S i) (ds i)) =
+        (case map_of V' i of None \<Rightarrow> retval_state_translation_partial 0 (S' i) (ds i)
+              | Some v \<Rightarrow> retval_state_translation_partial v (S' i) (ds i))" by metis
     with asmf show "S i = S' i"
-      apply(cases "(map_of Cs i)")
+      apply(cases "ds i")
       apply(auto split:option.splits)
       using state_transform_eq  apply(simp_all)
       using retval_state_translation_inj
@@ -390,8 +403,8 @@ qed
 subsection\<open>4.1.3 Translating preconditions\<close>
 
 
-definition equiv_prec_wrtt :: "hyper_assertion \<Rightarrow> hyper_term \<Rightarrow> val rel_hyper_assertion " where
-"equiv_prec_wrtt lhcP lhcCs = (\<lambda>S. (\<exists>S'. S = hyper_pre_state_translation lhcCs S' \<and> (lhcP S')))"
+definition equiv_prec_wrtt :: "hyper_assertion \<Rightarrow> (nat \<rightharpoonup> nat) \<Rightarrow> val rel_hyper_assertion " where
+"equiv_prec_wrtt lhcP ds = (\<lambda>S. (\<exists>S'. S = hyper_pre_state_translation ds S' \<and> (lhcP S')))"
 
 
 subsection\<open>4.1.4 Translating postconditions\<close>
@@ -399,8 +412,8 @@ subsection\<open>4.1.4 Translating postconditions\<close>
 definition post_state_combinations :: "val hyper_set \<Rightarrow> (nat \<Rightarrow> val npstate) set" where
   "post_state_combinations S = {S'. \<forall>i. \<exists>l. (l, S' i) \<in> S i}"
 
-definition equiv_post_wrtt :: "post_hyper_assertion \<Rightarrow> hyper_term \<Rightarrow> val rel_hyper_assertion " where
-"equiv_post_wrtt lhcQ Cs = (\<lambda>S. \<forall>S'\<in>(post_state_combinations S). (\<forall>V S''. dom (map_of V) = dom (map_of Cs) \<and> S' = hyper_post_state_translation Cs V S'' \<longrightarrow> (lhcQ V S'')))"
+definition equiv_post_wrtt :: "post_hyper_assertion \<Rightarrow> (nat \<rightharpoonup> nat) \<Rightarrow> val rel_hyper_assertion " where
+"equiv_post_wrtt lhcQ ds = (\<lambda>S. \<forall>S'\<in>(post_state_combinations S). (\<forall>V S''. dom (map_of V) = dom ds \<and> S' = hyper_post_state_translation ds V S'' \<longrightarrow> (lhcQ V S'')))"
 
 
 
@@ -1016,43 +1029,45 @@ qed
 
 
 
-theorem trm_translation_sem_equiv: "(\<langle>lhcC, \<sigma>\<rangle> \<Down> \<langle>v, \<sigma>'\<rangle> = (\<langle>program_translation lhcC, retval_state_translation 0 \<sigma> lhcC\<rangle> \<rightarrow> (retval_state_translation v \<sigma>' lhcC)))"
+theorem trm_translation_sem_equiv: "(\<langle>lhcC, \<sigma>\<rangle> \<Down> \<langle>v, \<sigma>'\<rangle> = (\<langle>program_translation lhcC, retval_state_translation 0 \<sigma> ((get_deepest_operation_depth lhcC))\<rangle> \<rightarrow> (retval_state_translation v \<sigma>' ((get_deepest_operation_depth lhcC)))))"
 proof -
   note t = LHC_RHHL_sem_equiv_general[where prev_stack= "[]" and sp = "0" and vp = "1+(get_deepest_operation_depth lhcC)" and lhcC = "lhcC" and \<sigma>="\<sigma>" and v="v" and \<sigma>'="\<sigma>'"]
-  thus ?thesis unfolding program_translation_def retval_state_translation_def by auto
+  thus ?thesis unfolding program_translation_def retval_state_translation_def by auto 
 qed
 
 
 text\<open>Theorem 4.1 (Hyper-triple subsumption)\<close>
-theorem hyper_triple_subsumption: "\<Turnstile>LHC {P} [Cs] {Q} \<longleftrightarrow> \<Turnstile> {equiv_prec_wrtt P Cs} [hyper_program_translation Cs] {equiv_post_wrtt Q Cs}"
+theorem hyper_triple_subsumption: "\<Turnstile>LHC {P} [Cs] {Q} \<longleftrightarrow> \<Turnstile> {equiv_prec_wrtt P (get_deepest_operation_depth_hyper (map_of Cs))} [hyper_program_translation Cs] {equiv_post_wrtt Q (get_deepest_operation_depth_hyper (map_of Cs))}"
   unfolding valid_def relational_hyper_hoare_triple_def hyper_hoare_triple_def imp_def
 proof(intro impI ballI allI iffI)
   fix S
   assume asm1: "\<forall>S. P S \<longrightarrow> wp Cs Q S"
-  assume "equiv_prec_wrtt P Cs S"
-  from this obtain S' where S_eq:"(S = hyper_pre_state_translation Cs S')" and "(P S')" unfolding equiv_prec_wrtt_def by blast
+  let ?ds = "(get_deepest_operation_depth_hyper (map_of Cs))"
+  assume "equiv_prec_wrtt P ?ds S"
+  from this obtain S' where S_eq:"(S = hyper_pre_state_translation ?ds S')" and "(P S')" unfolding equiv_prec_wrtt_def by blast
   with asm1 have  "wp Cs Q S'" by auto
   hence asm1_unf:"(\<forall>S'' V. \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle> \<longrightarrow> Q V S'')" unfolding wp_def by auto
-  let ?S' = "(sem_rel (hyper_program_translation Cs) (hyper_pre_state_translation Cs S'))"
-  from trm_translation_sem_equiv have "\<forall>S'''\<in>(post_state_combinations (?S')). (let V = hyper_post_state_translation_inv1 S''' Cs in let S'' = hyper_post_state_translation_inv2 Cs S''' in S''' = hyper_post_state_translation Cs V S'' \<and> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
-    apply(auto simp add: post_state_combinations_def hyper_program_translation_def hyper_pre_state_translation_def hyper_post_state_translation_inv2_def hyper_post_state_translation_def big_sem_hyper_def dom_def sem_rel_def sem_def Let_def split:option.splits)
+  let ?S' = "(sem_rel (hyper_program_translation Cs) (hyper_pre_state_translation ?ds S'))"
+  from trm_translation_sem_equiv have "\<forall>S'''\<in>(post_state_combinations (?S')). (let V = hyper_post_state_translation_inv1 S''' Cs in let S'' = hyper_post_state_translation_inv2 Cs S''' in S''' = hyper_post_state_translation ?ds V S'' \<and> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
+    apply(auto simp add: post_state_combinations_def hyper_program_translation_def hyper_pre_state_translation_def hyper_post_state_translation_inv2_def hyper_post_state_translation_def big_sem_hyper_def dom_def sem_rel_def sem_def Let_def get_deepest_operation_depth_hyper_def split:option.splits)
        apply(rule ext)
        apply(auto split:option.splits simp add:hyper_trans_inv_none)
       apply(rule ext)
-      apply(auto simp add: post_trans_inv hyper_trans_inv_rev transform_state_with_return_val_def)
-  proof
+      apply(auto simp add: post_trans_inv hyper_trans_inv_rev transform_state_with_return_val_def get_deepest_operation_depth_hyper_def)
+  proof 
     fix S''' i x x2
-    assume asm: "\<forall>i. (map_of Cs i = None \<longrightarrow> S''' i = (\<lambda>ia. if ia = 0 then 0 else if ia < Suc 0 then 0 else S' i (ia - Suc 0))) \<and>
-            (\<forall>x2. map_of Cs i = Some x2 \<longrightarrow> \<langle>program_translation x2, retval_state_translation 0 (S' i) x2\<rangle> \<rightarrow> S''' i)"
+    assume asm: " \<forall>i. (map_of Cs i = None \<longrightarrow> S''' i = (\<lambda>ia. if ia = 0 then 0 else if ia < Suc 0 then 0 else S' i (ia - Suc 0))) \<and>
+            (\<forall>x2. map_of Cs i = Some x2 \<longrightarrow> \<langle>program_translation x2, retval_state_translation 0 (S' i) (get_deepest_operation_depth x2)\<rangle> \<rightarrow> S''' i)"
     assume "map_of (hyper_post_state_translation_inv1 S''' Cs) i = Some x2"
     with hyper_trans_inv_rev have fct: "S''' i 0 = x2" by auto
-    show "S''' i x = retval_state_translation_partial x2 (post_state_translation_inv2 (S''' i) (map_of Cs i)) (map_of Cs i) x"
+    show "S''' i x = retval_state_translation_partial x2 (post_state_translation_inv2 (S''' i) (map_of Cs i))
+             (case map_of Cs i of None \<Rightarrow> None | Some C \<Rightarrow> Some (get_deepest_operation_depth C)) x"
     proof(cases "(map_of Cs i)")
       case None
       then show ?thesis by(auto simp add:transform_state_with_return_val_def fct)
     next
       case (Some C)
-      with asm have "\<langle>program_translation C, retval_state_translation 0 (S' i) C\<rangle> \<rightarrow> S''' i" by auto
+      with asm have "\<langle>program_translation C, retval_state_translation 0 (S' i) (get_deepest_operation_depth C)\<rangle> \<rightarrow> S''' i" by auto
       with translated_program_step_state obtain u \<gamma> where fct2: "S''' i = transform_state_with_return_val u \<gamma> [] (1 + get_deepest_operation_depth C)" 
         unfolding retval_state_translation_def using program_translation_def by fastforce
       from \<open>map_of Cs i = Some C\<close> show ?thesis apply(auto simp add:retval_state_translation_def transform_state_with_return_val_def fct)
@@ -1061,49 +1076,51 @@ proof(intro impI ballI allI iffI)
   next
     fix S''' i y
     assume asm1: "\<forall>i. (map_of Cs i = None \<longrightarrow> S''' i = (\<lambda>ia. if ia = 0 then 0 else if ia < Suc 0 then 0 else S' i (ia - Suc 0))) \<and>
-            (\<forall>x2. map_of Cs i = Some x2 \<longrightarrow> \<langle>program_translation x2, retval_state_translation 0 (S' i) x2\<rangle> \<rightarrow> S''' i)"
+            (\<forall>x2. map_of Cs i = Some x2 \<longrightarrow> \<langle>program_translation x2, retval_state_translation 0 (S' i) (get_deepest_operation_depth x2)\<rangle> \<rightarrow> S''' i)"
     assume asm2: "map_of Cs i = Some y"
     with hyper_trans_inv_none obtain v where fact1: "map_of (hyper_post_state_translation_inv1 S''' Cs) i = Some v" by force
     with hyper_trans_inv_rev have fct: "S''' i 0 = v" by auto
-    have "S''' i = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (map_of Cs i)"
+    have "S''' i = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (?ds i)"
       apply(rule ext)
     proof(cases "(map_of Cs i)")
       fix x
       case None
-      then show "S''' i x = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (map_of Cs i) x" by(auto simp add:transform_state_with_return_val_def fct)
+      then show "S''' i x = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (get_deepest_operation_depth_hyper (map_of Cs) i) x" by(auto simp add:transform_state_with_return_val_def get_deepest_operation_depth_hyper_def fct)
     next
       fix x
       case (Some C)
-      with asm1 have "\<langle>program_translation C, retval_state_translation 0 (S' i) C\<rangle> \<rightarrow> S''' i" by auto
+      with asm1 have "\<langle>program_translation C, retval_state_translation 0 (S' i) (get_deepest_operation_depth C)\<rangle> \<rightarrow> S''' i" by auto
       with translated_program_step_state obtain u \<gamma> where fct2: "S''' i = transform_state_with_return_val u \<gamma> [] (1 + get_deepest_operation_depth C)" 
         unfolding retval_state_translation_def using program_translation_def by fastforce
-      from \<open>map_of Cs i = Some C\<close> show "S''' i x = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (map_of Cs i) x"
-        apply(auto simp add:retval_state_translation_def transform_state_with_return_val_def fct)
-        using fct2 by(auto simp add:transform_state_with_return_val_def)
+      from \<open>map_of Cs i = Some C\<close> show "S''' i x = retval_state_translation_partial v (post_state_translation_inv2 (S''' i) (map_of Cs i)) (?ds i) x"
+        apply(auto simp add:retval_state_translation_def transform_state_with_return_val_def get_deepest_operation_depth_hyper_def fct)
+        using fct2 by(auto simp add:transform_state_with_return_val_def get_deepest_operation_depth_hyper_def)
     qed
     with asm1 asm2 have fact2: "\<langle>program_translation
-                  y, retval_state_translation 0 (S' i) y\<rangle> \<rightarrow> retval_state_translation v (post_state_translation_inv2 (S''' i) (Some y)) y" by auto
+                  y, retval_state_translation 0 (S' i) (get_deepest_operation_depth y)\<rangle> \<rightarrow> retval_state_translation v (post_state_translation_inv2 (S''' i) (Some y)) (get_deepest_operation_depth y)" by (auto simp add:get_deepest_operation_depth_hyper_def)
     from fact1 fact2 show "\<exists>v. map_of (hyper_post_state_translation_inv1 S''' Cs) i = Some v \<and>
                 \<langle>program_translation
-                  y, retval_state_translation 0 (S' i) y\<rangle> \<rightarrow> retval_state_translation v (post_state_translation_inv2 (S''' i) (Some y)) y" by auto
+                  y, retval_state_translation 0 (S' i) (get_deepest_operation_depth y)\<rangle> \<rightarrow> retval_state_translation v (post_state_translation_inv2 (S''' i) (Some y)) (get_deepest_operation_depth y)" by auto
   qed
-  with hyper_post_state_translation_inj cs_v_dom_eq have "\<forall>S'''\<in>(post_state_combinations (?S')). (\<forall>V S''. dom (map_of V) = dom (map_of Cs) \<and> S''' = hyper_post_state_translation Cs V S'' \<longrightarrow> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
-    by (smt (verit, ccfv_SIG) big_sem_hyper_def)
-  with asm1_unf S_eq show " equiv_post_wrtt Q Cs (sem_rel (hyper_program_translation Cs) S)" unfolding equiv_post_wrtt_def by blast
+  with hyper_post_state_translation_inj cs_v_dom_eq cs_ds_dom_eq have "\<forall>S'''\<in>(post_state_combinations (?S')). (\<forall>V S''. dom (map_of V) = dom (?ds) \<and> S''' = hyper_post_state_translation ?ds V S'' \<longrightarrow> \<langle>Cs, S'\<rangle> \<Down> \<langle>V, S''\<rangle>)"
+    by (smt (verit, ccfv_SIG) big_sem_hyper_def get_deepest_operation_depth_hyper_def)
+  with asm1_unf S_eq show " equiv_post_wrtt Q ?ds (sem_rel (hyper_program_translation Cs) S)" unfolding equiv_post_wrtt_def by blast
 next
   fix S
-  assume asm1: "\<forall>S. equiv_prec_wrtt P Cs S \<longrightarrow> equiv_post_wrtt Q Cs (sem_rel (hyper_program_translation Cs) S)"
+  let ?ds = "(get_deepest_operation_depth_hyper (map_of Cs))"
+  assume asm1: "\<forall>S. equiv_prec_wrtt P ?ds S \<longrightarrow> equiv_post_wrtt Q ?ds (sem_rel (hyper_program_translation Cs) S)"
   assume asm2: "P S"
-  let ?S' = "hyper_pre_state_translation Cs S"
-  from asm2 have asm2_fact: "equiv_prec_wrtt P Cs ?S'" using equiv_prec_wrtt_def by auto
+  let ?S' = "hyper_pre_state_translation ?ds S"
+  from asm2 have asm2_fact: "equiv_prec_wrtt P ?ds ?S'" using equiv_prec_wrtt_def by auto
   let ?S'' = "(sem_rel (hyper_program_translation Cs) ?S')"
-  from asm2_fact asm1 have "equiv_post_wrtt Q Cs ?S''" unfolding equiv_post_wrtt_def by auto
-  moreover from trm_translation_sem_equiv have "\<forall>S' V. \<langle>Cs, S\<rangle> \<Down> \<langle>V, S'\<rangle> \<longrightarrow> (hyper_post_state_translation Cs V S')\<in>(post_state_combinations ?S'')" 
-    apply(auto simp add: big_sem_hyper_def hyper_post_state_translation_def post_state_combinations_def sem_rel_def hyper_program_translation_def hyper_pre_state_translation_def sem_def split:option.splits)
+  from asm2_fact asm1 have "equiv_post_wrtt Q ?ds ?S''" unfolding equiv_post_wrtt_def by auto
+  moreover from trm_translation_sem_equiv have "\<forall>S' V. \<langle>Cs, S\<rangle> \<Down> \<langle>V, S'\<rangle> \<longrightarrow> (hyper_post_state_translation ?ds V S')\<in>(post_state_combinations ?S'')" 
+    apply(auto simp add: big_sem_hyper_def hyper_post_state_translation_def post_state_combinations_def sem_rel_def hyper_program_translation_def hyper_pre_state_translation_def sem_def get_deepest_operation_depth_hyper_def split:option.splits)
     apply (simp add: domIff)
     apply (meson domI domIff)
     done
-  ultimately show "wp Cs Q S" unfolding wp_def equiv_post_wrtt_def using cs_v_dom_eq by blast
+  ultimately show "wp Cs Q S" unfolding wp_def equiv_post_wrtt_def using cs_v_dom_eq cs_ds_dom_eq
+    by metis
 qed
 
 
